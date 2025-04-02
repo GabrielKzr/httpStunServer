@@ -27,12 +27,10 @@ typedef struct {
 
             * 0x0001: binding request
             * 0x0002: exchange ip request
-            * 0x0003: different STUN transaction ID
-            * 0x0004: allow router connection (request unique ID using UUiD)
+            * 0x0003: allow router connection (request unique ID using UUiD)
         
         response types:
 
-            * 0x0080: waiting user auth token (01)
             * 0x0101: binding response ok (01)
             * 0x0111: binding error response 1 (header received invalid) (01 & 02)
             * 0x0112: binding error response 2 (too much connections in the server) (01 & 02)
@@ -84,9 +82,10 @@ class StunServer {
 
         bool authClient(int sock);
         // bool stunClientInit(StunHeader* stunHeader, int sockFd);
-        crow::response detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn);
+        crow::response detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp);
         bool exchangeIpPort(ClientData* requestClient, ClientData* connectedClient);
         crow::response clientBind(StunHeader& stunRequest, crow::websocket::connection* conn);
+        crow::response exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp);
 
         // funções de busca
         bool findData(ClientData* data, ClientData* cmpval);

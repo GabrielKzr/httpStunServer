@@ -93,6 +93,7 @@ crow::response StunServer::handlePost(const crow::request& req) {
 
     StunHeader stunRequest;
     crow::response response;
+    const std::string* clientIp = &(req.remote_ip_address);
     
 // -------------------------- análise do stun request --------------------------
 
@@ -123,9 +124,9 @@ crow::response StunServer::handlePost(const crow::request& req) {
         std::string auth_id;
         auth_id = json_body["auth_id"].s();
 
-        response = detectRequestType(stunRequest, &auth_id, nullptr);
+        response = detectRequestType(stunRequest, &auth_id, nullptr, clientIp);
     } else {
-        response = detectRequestType(stunRequest, nullptr, nullptr);
+        response = detectRequestType(stunRequest, nullptr, nullptr, nullptr);
     }
 
 // --------------------------------------------------------------------------------------
@@ -133,7 +134,9 @@ crow::response StunServer::handlePost(const crow::request& req) {
     return response;
 }
 
-crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn) {
+crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp) {
+
+
 
     switch (stunRequest.type)
     {
@@ -141,19 +144,21 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         return this->clientBind(stunRequest, conn);
     
-    case 0x0002: // ip request // lógica vai ser alterada depois 
+    case 0x0002: // ip request 
 
- 
-        break;
+        std::cout << "Ip exchange request\n";
 
-    case 0x0003: // diferent stun transaction id (retransmission to router saying that the router exists)
-        
+        /* // precisa ativar quando vincular com o dart
+        if(!firebaseManager->verifyGoogleIdToken(*authId)) {
+            break;
+        }    
+        */
 
-        break;
+        return this->exchangeIpRequest(stunRequest, *clientIp);
 
     // provavelmente depois vão ter mais tipos de request
 
-    case 0x0004: // uuid request
+    case 0x0003: // uuid request
 
         std::cout << "Receive uuid request\n";
 
@@ -204,6 +209,21 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
     return crow::response(statusCode, j.dump());
 }
 
+crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp) {
+
+    std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
+
+    if(webSocketManager.get_connection(uuid) == nullptr) {
+        return crow::response(400, "client UUID not found");
+    }
+
+    // ------------- tratar o resto do ip request
+
+
+    // ---------------------------------------------------------------
+
+}
+
 void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
 
     static std::unordered_map<crow::websocket::connection*, std::string> pendingConnections;
@@ -216,7 +236,7 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
 
             StunHeader stunRequest = jsonNlohmannToStunHeader(j);
 
-            this->detectRequestType(stunRequest, nullptr, &conn);
+            this->detectRequestType(stunRequest, nullptr, &conn, nullptr);
 
         } catch (const json::exception& e) {
             std::cout << "Erro ao parsear JSON: " << e.what() << std::endl;
