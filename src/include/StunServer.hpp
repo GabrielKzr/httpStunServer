@@ -7,14 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <sys/select.h>
-#include <iomanip>
-#include <netinet/tcp.h>
 #include <fstream>
-
-#include <curl/curl.h>
 
 #include "WebSocketManager.hpp"
 #include "FirebaseManager.hpp"

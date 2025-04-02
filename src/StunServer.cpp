@@ -167,11 +167,6 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         generateUUIDBytes(stunRequest.uuid);
 
-        for (char c : stunRequest.uuid) {
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(uint8_t)c << " ";
-        }
-        std::cout << std::dec << std::endl;
-
         return crow::response(200, stunHeaderToJson(stunRequest));
 
     default:
