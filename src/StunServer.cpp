@@ -186,6 +186,12 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
     std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
 
+    /* // verificação se o uuid existe no firebase
+    if(!firebaseManager.verifyUuidExist(uuid)) {
+        return crow::response(400, "uuid não disponível")  
+    }
+    */
+
     json j;
     int statusCode = 0;
 
@@ -213,12 +219,28 @@ crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std:
 
     std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
 
-    if(webSocketManager.get_connection(uuid) == nullptr) {
+    /* // verifica se o cliente tem o uuid do roteador requisitado vinculado ao seu próprio id
+    if(!firebaseManager.clientHasUuid()) {
+        return crow::resoponse(400, "client ID has not UUID binded")
+    }    
+    */
+
+    crow::websocket::connection *conn;
+
+    // verifica se o roteador está conectado ao servidor
+    if((conn = webSocketManager.get_connection(uuid)) == nullptr) {
         return crow::response(400, "client UUID not found");
     }
 
     // ------------- tratar o resto do ip request
 
+    int port;
+
+    if((port = webSocketManager.getConnPort(conn, clientIp)) < 0) {
+        return crow::response(400, "Number os ips for this client excceeded");
+    }
+
+    // só fazer o ip exchange ...
 
     // ---------------------------------------------------------------
 
