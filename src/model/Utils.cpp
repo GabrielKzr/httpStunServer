@@ -126,6 +126,86 @@ crow::json::wvalue stunHeaderToJson(const StunHeader& header) {
     return json;
 }
 
+json stunHeaderToJsonNlohmann(const StunHeader& header) {
+    if (header.magic_cookie != 0x2112A442) {
+        throw std::runtime_error("Magic cookie inválido. Esperado: 0x2112A442");
+    }
+
+    json j;
+
+    j["type"] = header.type;
+
+    j["length"] = header.length;
+
+    j["magic_cookie"] = header.magic_cookie;
+
+    std::string uuid_str(reinterpret_cast<const char*>(header.uuid), 16);
+    j["uuid"] = uuid_str;
+
+    std::string tid_str(reinterpret_cast<const char*>(header.transaction_id), 12);
+    j["transaction_id"] = tid_str;
+
+    return j;
+}
+
+XorMappedAddress buildXorMappedAddress(int port, std::string clientIp) {
+
+    XorMappedAddress xorAddr;
+
+    xorAddr.type = htons(0x0020);
+    xorAddr.length = htons(8);
+    xorAddr.reserved = 0x00;
+    xorAddr.family = 0x01;
+    xorAddr.xor_port = htons(port ^ (MAGIC_COOKIE >> 16));
+
+    struct in_addr addr;
+    if (inet_pton(AF_INET, clientIp.c_str(), &addr) != 1) {
+        // Se a conversão falhar, defina um IP padrão ou trate o erro.
+        std::cerr << "Erro: IP inválido" << std::endl;
+        throw std::runtime_error("IP inválido");
+    }
+
+    xorAddr.xor_ip = htonl(ntohl(addr.s_addr) ^ MAGIC_COOKIE);
+
+    return xorAddr;
+}
+
+json xorMappedAddressToJsonNlohmann(const XorMappedAddress& xorAddr) {
+    // Verifica se o tipo é válido
+    if (ntohs(xorAddr.type) != 0x0020) {
+        throw std::runtime_error("Tipo inválido. Esperado: 0x0020 (XOR-MAPPED-ADDRESS)");
+    }
+
+    json j;
+
+    // Adiciona os campos básicos
+    j["xor_type"] = ntohs(xorAddr.type);          // Converte de network byte order para host
+    j["xor_length"] = ntohs(xorAddr.length);      // Converte de network byte order para host
+    j["reserved"] = xorAddr.reserved;
+    j["family"] = xorAddr.family;
+
+    // Decodifica a porta XOR usando o MAGIC_COOKIE (assumindo 0x2112A442 como no exemplo)
+    uint16_t port = ntohs(xorAddr.xor_port) ^ (MAGIC_COOKIE >> 16);
+    j["xor_port"] = port;
+
+    // Decodifica o IP XOR (apenas IPv4 por enquanto, family = 0x01)
+    if (xorAddr.family == 0x01) {
+        uint32_t ip = ntohl(xorAddr.xor_ip) ^ MAGIC_COOKIE;
+        struct in_addr addr;
+        addr.s_addr = htonl(ip); // Converte de volta para network byte order para inet_ntop
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr, ip_str, INET_ADDRSTRLEN);
+        j["xor_ip"] = std::string(ip_str);
+    } else if (xorAddr.family == 0x02) {
+        // Para IPv6, seria necessário um tratamento diferente (não implementado aqui)
+        throw std::runtime_error("IPv6 não suportado nesta implementação");
+    } else {
+        throw std::runtime_error("Família de endereço desconhecida");
+    }
+
+    return j;
+}
+
 void generateUUIDBytes(uint8_t uuidArray[16]) {
     boost::uuids::random_generator generator;
     boost::uuids::uuid uuid = generator(); // Usa o gerador estático

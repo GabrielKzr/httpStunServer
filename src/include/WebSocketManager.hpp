@@ -10,6 +10,7 @@
 struct connInfo {
     crow::websocket::connection* conn;
     std::vector<std::string> portIpMap;
+    StunHeader header;
 };
 
 class WebSocketManager
@@ -24,14 +25,14 @@ private:
 
 public:
 
-    void add(const std::string& uuid, crow::websocket::connection* conn);
+    void add(const std::string& uuid, crow::websocket::connection* conn, const StunHeader& header);
     void remove(const std::string& uuid_str);
     void sendToUUID(const std::string& uuid, const std::string& message);
     void broadcast(const std::string& message);
 
     int getConnPort(crow::websocket::connection* conn, const std::string& ip);
 
-    crow::websocket::connection* get_connection(const std::string& uuid);
+    connInfo* get_connection(const std::string& uuid);
     std::string get_uuid_by_connection(crow::websocket::connection* conn);
 };
 

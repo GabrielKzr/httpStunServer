@@ -20,5 +20,10 @@ crow::json::wvalue stunHeaderToJson(const StunHeader& header);
 void generateUUIDBytes(uint8_t uuidArray[16]);
 
 StunHeader jsonNlohmannToStunHeader(const json& json);
+json stunHeaderToJsonNlohmann(const StunHeader& header);
+
+XorMappedAddress buildXorMappedAddress(int port, std::string clientIp);
+json xorMappedAddressToJsonNlohmann(const XorMappedAddress& xorAddr);
+
 
 #endif

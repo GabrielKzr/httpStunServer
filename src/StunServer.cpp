@@ -196,7 +196,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
     int statusCode = 0;
 
     if(webSocketManager.get_connection(uuid) == nullptr) {
-        webSocketManager.add(uuid, conn);
+        webSocketManager.add(uuid, conn, stunRequest);
         std::cout << "UUID registrado: " << uuid << std::endl;
 
         j = {{"status", "success"}, {"message", "UUID registrado: " + uuid}};
@@ -225,7 +225,7 @@ crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std:
     }    
     */
 
-    crow::websocket::connection *conn;
+    connInfo *conn;
 
     // verifica se o roteador está conectado ao servidor
     if((conn = webSocketManager.get_connection(uuid)) == nullptr) {
@@ -236,14 +236,47 @@ crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std:
 
     int port;
 
-    if((port = webSocketManager.getConnPort(conn, clientIp)) < 0) {
+    if((port = webSocketManager.getConnPort(conn->conn, clientIp)) < 0) {
         return crow::response(400, "Number os ips for this client excceeded");
     }
 
+
+
     // só fazer o ip exchange ...
+
+    return this->exchangeIpPort(conn, port, clientIp, stunRequest);
 
     // ---------------------------------------------------------------
 
+}
+
+crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::string& clientIp, const StunHeader& stunRequest) {
+    
+    XorMappedAddress xorAddr;
+    
+    try {
+        xorAddr = buildXorMappedAddress(port, clientIp);
+    } catch(const std::exception& e) {
+        return crow::response(400, "IP inválido");
+    }
+
+    json j1 = xorMappedAddressToJsonNlohmann(xorAddr);
+    json j2 = stunHeaderToJsonNlohmann(conn->header);
+
+    j1.update(j2);
+
+    try {
+        xorAddr = buildXorMappedAddress(port, conn->conn->get_remote_ip());
+    } catch(const std::exception& e) {
+        return crow::response(400, "IP Inválido (do outro cliente)");
+    }
+
+    j1 = xorMappedAddressToJsonNlohmann(xorAddr);
+    j2 = stunHeaderToJsonNlohmann(stunRequest);
+
+    j1.update(j2);
+
+    return crow::response(200, j1.dump());
 }
 
 void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {

@@ -1,8 +1,8 @@
 #include "../include/WebSocketManager.hpp"
 
-void WebSocketManager::add(const std::string& uuid, crow::websocket::connection* conn) {
+void WebSocketManager::add(const std::string& uuid, crow::websocket::connection* conn, const StunHeader& header) {
     std::lock_guard<std::mutex> lock(mutex_);
-    connections_[uuid] = {conn, {}}; // Inicializa connInfo com a conexão e um vetor vazio
+    connections_[uuid] = {conn, {}, header}; // Inicializa connInfo com a conexão e um vetor vazio
     std::cout << "UUID registrado: " << uuid << std::endl;
 }
 
@@ -28,10 +28,10 @@ void WebSocketManager::broadcast(const std::string& message) {
     }
 }
 
-crow::websocket::connection* WebSocketManager::get_connection(const std::string& uuid) {
+connInfo* WebSocketManager::get_connection(const std::string& uuid) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = connections_.find(uuid);
-    return (it != connections_.end()) ? it->second.conn : nullptr;
+    return (it != connections_.end()) ? &it->second : nullptr;
 }
 
 std::string WebSocketManager::get_uuid_by_connection(crow::websocket::connection* conn) {
@@ -51,13 +51,13 @@ int WebSocketManager::getConnPort(crow::websocket::connection* conn, const std::
 
             // se a conexão já tem porta definida
 
-            for(int i = 0; i < info.portIpMap.size(); i++) {
+            for(size_t i = 0; i < info.portIpMap.size(); i++) {
                 if(info.portIpMap[i] == ip) {
                     return i + BASE_CONN_PORT;
                 }
             }
 
-            if(info.portIpMap.size() > MAX_IP_PER_CONNECTION) {
+            if(info.portIpMap.size() > (size_t)MAX_IP_PER_CONNECTION) {
                 return -1;
             }
 

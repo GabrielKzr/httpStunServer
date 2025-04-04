@@ -83,9 +83,9 @@ class StunServer {
         bool authClient(int sock);
         // bool stunClientInit(StunHeader* stunHeader, int sockFd);
         crow::response detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp);
-        bool exchangeIpPort(ClientData* requestClient, ClientData* connectedClient);
         crow::response clientBind(StunHeader& stunRequest, crow::websocket::connection* conn);
         crow::response exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp);
+        crow::response exchangeIpPort(connInfo *conn, int port, const std::string& clientIp, const StunHeader& stunRequest);
 
         // funções de busca
         bool findData(ClientData* data, ClientData* cmpval);
