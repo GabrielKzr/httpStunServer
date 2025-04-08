@@ -61,7 +61,7 @@ std::string FirebaseManager::sendRequest(const std::string& collection, const st
     return responseData;
 }
 
-bool FirebaseManager::verifyGoogleIdToken(const std::string& idToken) {
+bool FirebaseManager::verifyGoogleIdToken(const std::string& idToken, std::string* outLocalId = nullptr) {
     CURL* curl;
     CURLcode res;
 
@@ -114,12 +114,19 @@ bool FirebaseManager::verifyGoogleIdToken(const std::string& idToken) {
             curl_slist_free_all(headers);
             curl_global_cleanup();
             return false;
+        } 
+
+        if (jsonResponse.contains("users") && !jsonResponse["users"].empty()) {
+            if (outLocalId) {
+                *outLocalId = jsonResponse["users"][0]["localId"].get<std::string>();
+            }
+            std::cout << "Token válido! localId: " << outLocalId << std::endl;
         } else {
-            std::cout << "Token válido!" << std::endl;
+            std::cerr << "Campo 'users' não encontrado ou vazio na resposta do Firebase." << std::endl;
             curl_easy_cleanup(curl);
             curl_slist_free_all(headers);
             curl_global_cleanup();
-            return true;
+            return false;
         }
     } catch (const std::exception& e) {
         std::cerr << "Erro ao processar JSON: " << e.what() << std::endl;

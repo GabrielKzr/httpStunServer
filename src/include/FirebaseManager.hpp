@@ -28,7 +28,7 @@ public:
     }
 
     std::string sendRequest(const std::string& collection, const std::string& document, const std::string& jsonData, int method);
-    bool verifyGoogleIdToken(const std::string& idToken);
+    bool verifyGoogleIdToken(const std::string& idToken, std::string* outLocalId = nullptr);
 
 private:
 

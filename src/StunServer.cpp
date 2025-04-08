@@ -140,6 +140,7 @@ crow::response StunServer::handlePost(const crow::request& req) {
 crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp) {
 
     std::cout << stunRequest.type << std::endl;
+    std::string localId;
 
     switch (stunRequest.type)
     {
@@ -163,17 +164,22 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
     case 0x0003: // uuid request
 
+        // transformar isso em uma função 
+
         std::cout << "Receive uuid request\n";
 
         std::cout << authId << std::endl;
 
-        // precisa ativar quando vincular com o dart
-        if(!firebaseManager->verifyGoogleIdToken(*authId)) {
+        if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
             std::cout << "Não foi possível autenticar cliente\n";
             break;
         }    
 
         generateUUIDBytes(stunRequest.uuid);
+
+        // ------------- FAZER AMANHÃ -------------------------
+
+        // firebaseManager->sendRequest("users", localId, , POST);
 
         return crow::response(200, stunHeaderToJson(stunRequest));
 
