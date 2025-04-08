@@ -117,26 +117,29 @@ crow::response StunServer::handlePost(const crow::request& req) {
 
 // -------------------------------------------------------------------------------------
 
-// ------------------------- verificação do tipo de request ----------------------------
+    std::string auth_id;
 
     if (json_body.has("auth_id")) {
 
-        std::string auth_id;
         auth_id = json_body["auth_id"].s();
 
-        response = detectRequestType(stunRequest, &auth_id, nullptr, clientIp);
     } else {
-        response = detectRequestType(stunRequest, nullptr, nullptr, nullptr);
+
+        crow::response(400, "Necessário ID de indentificação");
+
     }
 
-// --------------------------------------------------------------------------------------
+    // ------------------------- verificação do tipo de request ----------------------------
 
-    return response;
+    return this->detectRequestType(stunRequest, &auth_id, nullptr, clientIp);;
+
+    // --------------------------------------------------------------------------------------
+
 }
 
 crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp) {
 
-
+    std::cout << stunRequest.type << std::endl;
 
     switch (stunRequest.type)
     {
@@ -164,11 +167,11 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         std::cout << authId << std::endl;
 
-        /* // precisa ativar quando vincular com o dart
+        // precisa ativar quando vincular com o dart
         if(!firebaseManager->verifyGoogleIdToken(*authId)) {
+            std::cout << "Não foi possível autenticar cliente\n";
             break;
         }    
-        */
 
         generateUUIDBytes(stunRequest.uuid);
 

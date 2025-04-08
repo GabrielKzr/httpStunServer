@@ -5,7 +5,7 @@ Future<void> sendRequest() async {
   final uri = Uri.parse("http://localhost:18080/");
   
   final Map<String, dynamic> data = {
-    "type": 4,
+    "type": 3,
     "length": 20,
     "uuid": "1234567890123456",
     "transaction_id": "abcdef123456",

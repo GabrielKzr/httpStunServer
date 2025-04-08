@@ -10,13 +10,16 @@ src = [
 	'src/main.cpp', 
 	'src/StunServer.cpp',
 	'src/model/Utils.cpp',
-	'src/model/WebSocketManager.cpp'
+	'src/model/WebSocketManager.cpp',
+	'src/model/FirebaseManager.cpp'
 ]
 
-crow = dependency('Crow')
+crow = dependency('Crow', required: true)
+curl_dep = dependency('libcurl', required: true)
 
 deps = [
-	crow
+	crow,
+	curl_dep
 ]
 
 executable('ss', src, dependencies: deps, include_directories: incdir)

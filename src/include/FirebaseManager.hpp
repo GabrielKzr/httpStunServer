@@ -3,7 +3,7 @@
 
 #include <iostream>
 #include <curl/curl.h>
-#include <json/json.h>
+#include <nlohmann/json.hpp> 
 
 #pragma once
 
@@ -15,7 +15,6 @@ enum HttpMethods {
     PATCH
 };
 
-// Declaração da função
 const char* methodToString(int method);
 
 class FirebaseManager {
