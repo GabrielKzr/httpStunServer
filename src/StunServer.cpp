@@ -301,10 +301,20 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
     std::string response = firebaseManager->sendRequest("users", "", "", GET);
 
     if(response.empty()) {
-        std::cout << "Coleção inexistente\n";
+        std::cout << "Erro na requisição ou sem permissão\n";
     } else {
-        std::cout << "coleção vazia\n";
-        std::cout << response << std::endl;
+        json jsonResponse = json::parse(response);
+
+        if (jsonResponse.empty()) {
+            std::cout << "Coleção vazia\n";
+
+            std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), PUT);
+            std::cout << response_2 << std::endl;
+        } else if (jsonResponse.contains("error")) {
+            std::cout << "Erro da API: " << jsonResponse["error"]["message"] << std::endl;
+        } else {
+            std::cout << "Coleção com dados:\n" << jsonResponse.dump(4) << std::endl;
+        }
     }
 
 
