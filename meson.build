@@ -16,10 +16,12 @@ src = [
 
 crow = dependency('Crow', required: true)
 curl_dep = dependency('libcurl', required: true)
+jwt = dependency('jwt-cpp', required: true)
 
 deps = [
 	crow,
-	curl_dep
+	curl_dep,
+	jwt
 ]
 
 executable('ss', src, dependencies: deps, include_directories: incdir)

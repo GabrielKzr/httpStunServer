@@ -1,4 +1,4 @@
 .flutter-plugins
 .flutter-plugins-dependencies
 pubspec.lock
-./src/files/google-services.json
+/src/files/

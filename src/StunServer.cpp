@@ -34,7 +34,7 @@ StunServer::StunServer(int port, size_t maxClients) {
 
 // ----------------------------------------------------------------------------
 
-    firebaseManager = new FirebaseManager(PROJECT_ID, FIREBASE_API_KEY);
+    firebaseManager = new FirebaseManager(PROJECT_ID, FIREBASE_API_KEY, "src/files/sigmarr-c99af-firebase-adminsdk-fbsvc-34bd8258ee.json");
 }
 
 void StunServer::stunServerInit() {
@@ -140,7 +140,6 @@ crow::response StunServer::handlePost(const crow::request& req) {
 crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp) {
 
     std::cout << stunRequest.type << std::endl;
-    std::string localId;
 
     switch (stunRequest.type)
     {
@@ -167,21 +166,10 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
         // transformar isso em uma função 
 
         std::cout << "Receive uuid request\n";
-
+    
         std::cout << authId << std::endl;
 
-        if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
-            std::cout << "Não foi possível autenticar cliente\n";
-            break;
-        }    
-
-        generateUUIDBytes(stunRequest.uuid);
-
-        // ------------- FAZER AMANHÃ -------------------------
-
-        // firebaseManager->sendRequest("users", localId, , POST);
-
-        return crow::response(200, stunHeaderToJson(stunRequest));
+        return this->uuidResponse(stunRequest, authId);
 
     default:
 
@@ -286,6 +274,43 @@ crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::s
     j1.update(j2);
 
     return crow::response(200, j1.dump());
+}
+
+crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* authId) {
+
+    std::string localId;
+
+    if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
+        std::cout << "Não foi possível autenticar cliente\n";
+        return crow::response(400, "Autenticação do google inválida");
+    }    
+
+    generateUUIDBytes(stunRequest.uuid);
+
+    // ------------- FAZER AMANHÃ -------------------------
+
+    std::string uuid_str(reinterpret_cast<const char*>(stunRequest.uuid), 16);
+
+    json routerJson;
+    routerJson[uuid_str] = {
+        {"type" , "DM956_1800GT"} // type tem que vir na mensagem do usuário depois
+    };
+
+    // ---------- descobrir se a coleção já existe no cloudstore
+
+    std::string response = firebaseManager->sendRequest("users", "", "", GET);
+
+    if(response.empty()) {
+        std::cout << "Coleção inexistente\n";
+    } else {
+        std::cout << "coleção vazia\n";
+        std::cout << response << std::endl;
+    }
+
+
+    // firebaseManager->sendRequest("users", localId, routerJson, POST);
+
+    return crow::response(200, stunHeaderToJson(stunRequest));
 }
 
 void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
