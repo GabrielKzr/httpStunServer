@@ -25,5 +25,9 @@ json stunHeaderToJsonNlohmann(const StunHeader& header);
 XorMappedAddress buildXorMappedAddress(int port, std::string clientIp);
 json xorMappedAddressToJsonNlohmann(const XorMappedAddress& xorAddr);
 
+std::string base64_encode(const unsigned char* bytes, size_t length);
+std::string base64_decode(const std::string& encoded_string);
+
+json toFirestoreMap(const json& plainMap);
 
 #endif

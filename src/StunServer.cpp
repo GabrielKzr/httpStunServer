@@ -289,13 +289,24 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
 
     // ------------- FAZER AMANHÃ -------------------------
 
-    std::string uuid_str(reinterpret_cast<const char*>(stunRequest.uuid), 16);
+    // std::string uuid_str(reinterpret_cast<const char*>(stunRequest.uuid), 16);
 
-    json routerJson;
-    routerJson[uuid_str] = {
-        {"type" , "DM956_1800GT"} // type tem que vir na mensagem do usuário depois
+    std::string uuid_base64 = base64_encode(stunRequest.uuid, 16);
+
+    json routerJson = {
+        {"fields", {
+            {"routers", {
+                {"mapValue", {
+                    {"fields", {
+                        {uuid_base64, toFirestoreMap({
+                            {"type", "DM956_1800GT"}
+                        })}
+                    }}
+                }}
+            }}
+        }}
     };
-
+    
     // ---------- descobrir se a coleção já existe no cloudstore
 
     std::string response = firebaseManager->sendRequest("users", "", "", GET);
@@ -308,12 +319,15 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
         if (jsonResponse.empty()) {
             std::cout << "Coleção vazia\n";
 
-            std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), PUT);
+            std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), POST);
             std::cout << response_2 << std::endl;
         } else if (jsonResponse.contains("error")) {
             std::cout << "Erro da API: " << jsonResponse["error"]["message"] << std::endl;
         } else {
-            std::cout << "Coleção com dados:\n" << jsonResponse.dump(4) << std::endl;
+            
+            std::cout << "Coleção NÃO está vazia\n";
+            std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), PATCH);
+            std::cout << response_2 << std::endl;
         }
     }
 

@@ -29,8 +29,21 @@ std::string FirebaseManager::sendRequest(const std::string& collection, const st
     struct curl_slist *headers = NULL;
 
     const std::string methodStr = methodToString(method);
+    std::string url;
 
-    std::string url = FIRESTORE_URL + collection + "/" + document;
+    // Montagem inteligente da URL
+    if (document.empty()) {
+        // Criar documento com ID automático
+        url = FIRESTORE_URL + collection;
+    } else {
+        if (methodStr == "POST") {
+            // Criar com ID específico
+            url = FIRESTORE_URL + collection + "?documentId=" + document;
+        } else {
+            // PUT ou GET/DELETE para documento específico
+            url = FIRESTORE_URL + collection + "/" + document;
+        }
+    }
 
     curl = curl_easy_init();
     if (!curl) {
@@ -43,9 +56,10 @@ std::string FirebaseManager::sendRequest(const std::string& collection, const st
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, methodStr.c_str()); 
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, methodStr.c_str());
+
     if (methodStr != "GET" && methodStr != "DELETE") {
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str()); 
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
     }
 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, +[](void *ptr, size_t size, size_t nmemb, std::string *data) -> size_t {
@@ -221,6 +235,7 @@ bool FirebaseManager::getFirebaseAccessToken(const std::string& jsonPath) {
     auto jsonResp = nlohmann::json::parse(response);
     if (jsonResp.contains("access_token")) {
         firebaseAccessToken = jsonResp["access_token"];
+        std::cout << "Firebase access token: " << firebaseAccessToken << std::endl;
         return true;
     } else {
         std::cerr << "Resposta inválida:\n" << response << "\n";

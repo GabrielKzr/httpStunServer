@@ -211,3 +211,95 @@ void generateUUIDBytes(uint8_t uuidArray[16]) {
     boost::uuids::uuid uuid = generator(); // Usa o gerador estático
     std::memcpy(uuidArray, uuid.data, 16);
 }
+
+std::string base64_encode(const unsigned char* bytes, size_t length) {
+    const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string ret;
+    int i = 0, j = 0;
+    unsigned char char_array_3[3], char_array_4[4];
+
+    for (size_t n = 0; n < length; n++) {
+        char_array_3[i++] = bytes[n];
+        if (i == 3) {
+            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+            char_array_4[3] = char_array_3[2] & 0x3f;
+
+            for (i = 0; i < 4; i++)
+                ret += base64_chars[char_array_4[i]];
+            i = 0;
+        }
+    }
+
+    if (i) {
+        for (j = i; j < 3; j++)
+            char_array_3[j] = '\0';
+
+        char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+        char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+        char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+
+        for (j = 0; j < i + 1; j++)
+            ret += base64_chars[char_array_4[j]];
+
+        while (i++ < 3)
+            ret += '=';
+    }
+
+    return ret;
+}
+
+std::string base64_decode(const std::string& encoded_string) {
+    const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string decoded_data;
+    int in_len = encoded_string.size();
+    int i = 0, j = 0;
+    unsigned char char_array_4[4], char_array_3[3];
+
+    while (in_len-- && encoded_string[i] != '=' && base64_chars.find(encoded_string[i]) != std::string::npos) {
+        char_array_4[j++] = encoded_string[i++];
+        if (j == 4) {
+            for (int k = 0; k < 4; k++) {
+                char_array_4[k] = base64_chars.find(char_array_4[k]);
+            }
+
+            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+            char_array_3[1] = ((char_array_4[1] & 0x0f) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+            char_array_3[2] = ((char_array_4[2] & 0x03) << 6) + char_array_4[3];
+
+            decoded_data.append(reinterpret_cast<char*>(char_array_3), 3);
+            j = 0;
+        }
+    }
+
+    if (j) {
+        for (int k = j; k < 4; k++) {
+            char_array_4[k] = 0;
+        }
+        for (int k = 0; k < 4; k++) {
+            char_array_4[k] = base64_chars.find(char_array_4[k]);
+        }
+
+        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+        char_array_3[1] = ((char_array_4[1] & 0x0f) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+
+        decoded_data.append(reinterpret_cast<char*>(char_array_3), j - 1);
+    }
+
+    return decoded_data;
+}
+
+json toFirestoreMap(const json& plainMap) {
+    json fields;
+    for (auto& [key, value] : plainMap.items()) {
+        fields[key] = {
+            {"stringValue", value}
+        };
+    }
+    return {
+        {"mapValue", {
+            {"fields", fields}
+        }}
+    };
+}
