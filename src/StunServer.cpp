@@ -277,64 +277,204 @@ crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::s
 }
 
 crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* authId) {
-
     std::string localId;
 
-    if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
+    // Verifica o token do Google e pega o localId
+    if (!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
         std::cout << "Não foi possível autenticar cliente\n";
-        return crow::response(400, "Autenticação do google inválida");
-    }    
+        return crow::response(400, "Autenticação do Google inválida");
+    }
 
+    // Gera o UUID e converte pra base64
     generateUUIDBytes(stunRequest.uuid);
 
-    // ------------- FAZER AMANHÃ -------------------------
+    return crow::response(200, stunHeaderToJson(stunRequest));
+}
 
-    // std::string uuid_str(reinterpret_cast<const char*>(stunRequest.uuid), 16);
+bool StunServer::addRouterToUser(const std::string& localId, const std::string& uuid_base64) {
+    // Faz o GET no documento do usuário
+    std::string response = firebaseManager->sendRequest("users", localId, "", GET);
 
-    std::string uuid_base64 = base64_encode(stunRequest.uuid, 16);
+    if (response.empty()) {
+        std::cout << "Erro na requisição ou sem permissão\n";
+        return false;
+    }
 
-    json routerJson = {
-        {"fields", {
-            {"routers", {
-                {"mapValue", {
-                    {"fields", {
-                        {uuid_base64, toFirestoreMap({
-                            {"type", "DM956_1800GT"}
-                        })}
+    json jsonResponse;
+    try {
+        jsonResponse = json::parse(response);
+    } catch (const json::parse_error& e) {
+        std::cout << "Erro ao parsear resposta do GET: " << e.what() << std::endl;
+        return false;
+    }
+
+    json routerJson;
+
+    // Verifica se o documento existe
+    if (jsonResponse.empty() || !jsonResponse.contains("fields")) {
+        std::cout << "Documento não existe, criando...\n";
+        // Cria o JSON para o novo documento com o primeiro router
+        routerJson = {
+            {"fields", {
+                {"routers", {
+                    {"mapValue", {
+                        {"fields", {
+                            {uuid_base64, {
+                                {"mapValue", {
+                                    {"fields", {
+                                        {"type", {{"stringValue", "DM956_1800GT"}}}
+                                    }}
+                                }}
+                            }}
+                        }}
                     }}
                 }}
             }}
-        }}
-    };
-    
-    // ---------- descobrir se a coleção já existe no cloudstore
+        };
+        // Tenta criar o documento com POST
+        std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), POST);
+        std::cout << "Resposta da criação: " << response_2 << std::endl;
 
-    std::string response = firebaseManager->sendRequest("users", "", "", GET);
+        // Verifica se houve erro 409 (documento já existe)
+        if (!response_2.empty()) {
+            json postResponse;
+            try {
+                postResponse = json::parse(response_2);
+            } catch (const json::parse_error& e) {
+                std::cout << "Erro ao parsear resposta do POST: " << e.what() << std::endl;
+                return false;
+            }
 
-    if(response.empty()) {
-        std::cout << "Erro na requisição ou sem permissão\n";
-    } else {
-        json jsonResponse = json::parse(response);
+            if (postResponse.contains("error") && postResponse["error"]["code"] == 409) {
+                std::cout << "Documento já existe, tentando atualizar...\n";
+                // Faz outro GET pra pegar o estado atual do documento
+                std::string getResponse = firebaseManager->sendRequest("users", localId, "", GET);
+                if (getResponse.empty()) {
+                    std::cout << "Erro na requisição GET após erro 409\n";
+                    return false;
+                }
 
-        if (jsonResponse.empty()) {
-            std::cout << "Coleção vazia\n";
+                json getJsonResponse;
+                try {
+                    getJsonResponse = json::parse(getResponse);
+                } catch (const json::parse_error& e) {
+                    std::cout << "Erro ao parsear resposta do GET: " << e.what() << std::endl;
+                    return false;
+                }
 
-            std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), POST);
-            std::cout << response_2 << std::endl;
-        } else if (jsonResponse.contains("error")) {
-            std::cout << "Erro da API: " << jsonResponse["error"]["message"] << std::endl;
-        } else {
-            
-            std::cout << "Coleção NÃO está vazia\n";
-            std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), PATCH);
-            std::cout << response_2 << std::endl;
+                // Pega o mapa routers atual, se existir
+                json currentRouters;
+                if (getJsonResponse.contains("fields") && getJsonResponse["fields"].contains("routers") && 
+                    getJsonResponse["fields"]["routers"].contains("mapValue")) {
+                    currentRouters = getJsonResponse["fields"]["routers"]["mapValue"]["fields"];
+                } else {
+                    currentRouters = json::object();  // Cria um mapa vazio se não existir
+                }
+
+                // Adiciona o novo router ao mapa
+                currentRouters[uuid_base64] = {
+                    {"mapValue", {
+                        {"fields", {
+                            {"type", {{"stringValue", "DM956_1800GT"}}}
+                        }}
+                    }}
+                };
+
+                // Monta o JSON atualizado com o mapa routers completo
+                routerJson = {
+                    {"fields", {
+                        {"routers", {
+                            {"mapValue", {
+                                {"fields", currentRouters}
+                            }}
+                        }}
+                    }}
+                };
+
+                // Faz o PATCH pra atualizar o documento
+                std::string patchResponse = firebaseManager->sendRequest("users", localId, routerJson.dump(), PATCH);
+                std::cout << "Resposta da atualização: " << patchResponse << std::endl;
+
+                // Verifica se o PATCH foi bem-sucedido
+                if (!patchResponse.empty()) {
+                    json patchJsonResponse;
+                    try {
+                        patchJsonResponse = json::parse(patchResponse);
+                        if (!patchJsonResponse.contains("error")) {
+                            return true;
+                        } else {
+                            std::cout << "Erro no PATCH: " << patchJsonResponse["error"]["message"] << std::endl;
+                            return false;
+                        }
+                    } catch (const json::parse_error& e) {
+                        std::cout << "Erro ao parsear resposta do PATCH: " << e.what() << std::endl;
+                        return false;
+                    }
+                }
+                return false;
+            } else if (!postResponse.contains("error")) {
+                // POST bem-sucedido
+                return true;
+            } else {
+                // Outro erro no POST
+                std::cout << "Erro na criação: " << postResponse["error"]["message"] << std::endl;
+                return false;
+            }
         }
+        std::cout << "Resposta vazia na criação\n";
+        return false;
+    } else {
+        std::cout << "Documento existe, atualizando...\n";
+        // Pega o mapa routers atual, se existir
+        json currentRouters;
+        if (jsonResponse["fields"].contains("routers") && jsonResponse["fields"]["routers"].contains("mapValue")) {
+            currentRouters = jsonResponse["fields"]["routers"]["mapValue"]["fields"];
+        } else {
+            currentRouters = json::object();  // Cria um mapa vazio se não existir
+        }
+
+        // Adiciona o novo router ao mapa
+        currentRouters[uuid_base64] = {
+            {"mapValue", {
+                {"fields", {
+                    {"type", {{"stringValue", "DM956_1800GT"}}}
+                }}
+            }}
+        };
+
+        // Monta o JSON atualizado com o mapa routers completo
+        routerJson = {
+            {"fields", {
+                {"routers", {
+                    {"mapValue", {
+                        {"fields", currentRouters}
+                    }}
+                }}
+            }}
+        };
+
+        // Faz o PATCH pra atualizar o documento
+        std::string response_2 = firebaseManager->sendRequest("users", localId, routerJson.dump(), PATCH);
+        std::cout << "Resposta da atualização: " << response_2 << std::endl;
+
+        // Verifica se o PATCH foi bem-sucedido
+        if (!response_2.empty()) {
+            json patchJsonResponse;
+            try {
+                patchJsonResponse = json::parse(response_2);
+                if (!patchJsonResponse.contains("error")) {
+                    return true;
+                } else {
+                    std::cout << "Erro no PATCH: " << patchJsonResponse["error"]["message"] << std::endl;
+                    return false;
+                }
+            } catch (const json::parse_error& e) {
+                std::cout << "Erro ao parsear resposta do PATCH: " << e.what() << std::endl;
+                return false;
+            }
+        }
+        return false;
     }
-
-
-    // firebaseManager->sendRequest("users", localId, routerJson, POST);
-
-    return crow::response(200, stunHeaderToJson(stunRequest));
 }
 
 void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {

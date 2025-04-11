@@ -25,7 +25,7 @@ class FirebaseManager {
 public: 
     
     FirebaseManager(std::string project_id, std::string api_key, std::string pathToAdmJson);
-
+    
     std::string sendRequest(const std::string& collection, const std::string& document, const std::string& jsonData, int method);
     bool verifyGoogleIdToken(const std::string& idToken, std::string* outLocalId = nullptr);
     bool getFirebaseAccessToken(const std::string& jsonPath);
