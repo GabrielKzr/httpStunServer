@@ -4,7 +4,6 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include/oatpp-1.4.0/oatpp",
                 "/usr/include/libwebsockets"
             ],
             "defines": [],

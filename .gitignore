@@ -2,5 +2,5 @@
 .flutter-plugins-dependencies
 pubspec.lock
 /src/files/
-/.vscode
-/.dart_tool
+.vscode
+.dart_tool
