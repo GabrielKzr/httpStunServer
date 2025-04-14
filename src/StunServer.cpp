@@ -181,6 +181,8 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
 crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn) {
 
+    std::cout << "Entro no clientBind\n";
+
     std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
 
     /* // verificação se o uuid existe no firebase
@@ -290,6 +292,59 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
 
     return crow::response(200, stunHeaderToJson(stunRequest));
 }
+
+void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
+
+    static std::unordered_map<crow::websocket::connection*, std::string> pendingConnections;
+
+    if(!is_binary) {
+
+        try {
+
+            json j = json::parse(data);
+
+            StunHeader stunRequest;
+
+            try {
+                stunRequest = jsonNlohmannToStunHeader(j);
+            } catch (const std::runtime_error& e) {
+                std::cerr << "Erro ao parsear para stunRequest: " << e.what() << std::endl;
+                conn.send_text(json{{"status", "error"}, {"message", "Chaves inválidas"}}.dump());
+            }
+
+
+            if (j.contains("auth_id")) {
+
+                std::string auth_id;
+                auth_id = j["auth_id"].dump();
+                this->detectRequestType(stunRequest, &auth_id, &conn, nullptr);
+
+            } else {
+
+                conn.send_text(json{{"status", "error"}, {"message", "Faltando auth_id"}}.dump());
+                this->detectRequestType(stunRequest, nullptr, &conn, nullptr);
+
+            }
+
+        } catch (const json::exception& e) {
+            std::cout << "Erro ao parsear JSON: " << e.what() << std::endl;
+            conn.send_text(json{{"status", "error"}, {"message", "JSON inválido"}}.dump());
+        }
+    } else {
+        std::cout << "Mensagem binária ignorada" << std::endl;
+        conn.send_text(json{{"status", "error"}, {"message", "Apenas JSON (texto) é aceito"}}.dump());
+    }
+}
+
+void StunServer::stunServerClose() {
+    app.stop();
+}
+
+StunServer::~StunServer() {
+    delete firebaseManager;
+}
+
+// ============================================= F U N Ç Ã O  P A R A  S A L V A R  U U I D  N O  F I R E B A S E ============================================
 
 bool StunServer::addRouterToUser(const std::string& localId, const std::string& uuid_base64) {
     // Faz o GET no documento do usuário
@@ -476,36 +531,3 @@ bool StunServer::addRouterToUser(const std::string& localId, const std::string& 
         return false;
     }
 }
-
-void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
-
-    static std::unordered_map<crow::websocket::connection*, std::string> pendingConnections;
-
-    if(!is_binary) {
-
-        try {
-
-            json j = json::parse(data);
-
-            StunHeader stunRequest = jsonNlohmannToStunHeader(j);
-
-            this->detectRequestType(stunRequest, nullptr, &conn, nullptr);
-
-        } catch (const json::exception& e) {
-            std::cout << "Erro ao parsear JSON: " << e.what() << std::endl;
-            conn.send_text(json{{"status", "error"}, {"message", "JSON inválido"}}.dump());
-        }
-    } else {
-        std::cout << "Mensagem binária ignorada" << std::endl;
-        conn.send_text(json{{"status", "error"}, {"message", "Apenas JSON (texto) é aceito"}}.dump());
-    }
-}
-
-void StunServer::stunServerClose() {
-    app.stop();
-}
-
-StunServer::~StunServer() {
-    delete firebaseManager;
-}
-

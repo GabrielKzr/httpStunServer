@@ -1,16 +1,21 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <cjson/cJSON.h>
 #include <libwebsockets.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <time.h>
+#include "include/Utils.h"
 
 #define PORT 3478
 #define BUFFER_SIZE 1500
 
 static int interrupted = 0;
+
+typedef struct {
+    unsigned char uuid[16];
+    char idToken[1300];
+    int sent;  // Flag para evitar envio múltiplo
+} session_data_t;
 
 static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason,
                                void *user, void *in, size_t len) {
@@ -21,12 +26,58 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
             break;
 
         case LWS_CALLBACK_CLIENT_WRITEABLE: {
-            const char *msg = "Hello from client!";
-            unsigned char buf[LWS_PRE + 256];
-            size_t msg_len = strlen(msg);
 
-            memcpy(&buf[LWS_PRE], msg, msg_len);
-            lws_write(wsi, &buf[LWS_PRE], msg_len, LWS_WRITE_TEXT);
+            session_data_t *data = (session_data_t *)user;
+
+            if (data->sent) break;
+
+            StunHeader header = create_stun_request(data->uuid);
+            
+            // Cria o JSON
+            cJSON *json = stun_header_to_json(&header);
+            cJSON_AddStringToObject(json, "auth_id", data->idToken);
+
+            // Serializa pra string
+            char *json_str = cJSON_PrintUnformatted(json);
+
+            printf("%s\n", json_str);
+
+            printf("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\n");
+
+            // Envia pela WebSocket
+            unsigned char buf[LWS_PRE + 1024];
+            size_t len = strlen(json_str);
+            memcpy(&buf[LWS_PRE], json_str, len);
+
+            printf("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD\n");
+
+            if (data->idToken == NULL) {
+                fprintf(stderr, "idToken está NULL!\n");
+                break;
+            }
+
+            if (json_str == NULL) {
+                fprintf(stderr, "json_str está NULL!\n");
+                break;
+            }
+
+            if (len > 1024) {
+                fprintf(stderr, "JSON muito grande: %zu bytes\n", len);
+                break;
+            }
+
+            lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
+
+            printf("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
+
+            // Libera memória
+            cJSON_Delete(json);
+            free(json_str);
+
+            printf("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
+
+            data->sent = 1;
+
             break;
         }
 
@@ -56,7 +107,7 @@ static struct lws_protocols protocols[] = {
     {
         "my-protocol",
         callback_websockets,
-        0,  // sem per_session_data
+        sizeof(session_data_t),  // sem per_session_data
         4096,
     },
     { NULL, NULL, 0, 0 } // fim da lista
@@ -93,6 +144,11 @@ int verifyUUIDreceived(unsigned char* uuid, char* idToken) {
         return 0;
     }
 
+    session_data_t *data = (session_data_t *)lws_wsi_user(wsi);
+    memcpy(data->uuid, uuid, 16);
+    strncpy(data->idToken, idToken, sizeof(data->idToken) - 1);
+    data->sent = 0;
+
     while (!interrupted) {
         lws_service(context, 100);
     }
@@ -103,6 +159,10 @@ int verifyUUIDreceived(unsigned char* uuid, char* idToken) {
 }
 
 int main() {
+
+    // Antes de usar:
+    srand(time(NULL));  // Só uma vez no começo do programa
+
     int server_fd, client_fd;
     struct sockaddr_in address;
     char buffer[BUFFER_SIZE];
@@ -112,6 +172,12 @@ int main() {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == 0) {
         perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    int opt = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt");
         exit(EXIT_FAILURE);
     }
 

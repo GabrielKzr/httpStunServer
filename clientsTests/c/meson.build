@@ -7,7 +7,8 @@ project(
 incdir = include_directories('src/include')
 
 src = [
-  'src/main.c'
+  'src/main.c',
+  'src/model/Utils.c'
 ]
 
 libwebsockets = dependency('libwebsockets', required: true)
