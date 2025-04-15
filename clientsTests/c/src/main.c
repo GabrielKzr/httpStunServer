@@ -12,8 +12,8 @@
 static int interrupted = 0;
 
 typedef struct {
-    unsigned char uuid[16];
-    char idToken[1300];
+    unsigned char uuid[33];
+    char idToken[2048];
     int sent;  // Flag para evitar envio múltiplo
 } session_data_t;
 
@@ -26,55 +26,67 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
             break;
 
         case LWS_CALLBACK_CLIENT_WRITEABLE: {
-
             session_data_t *data = (session_data_t *)user;
 
             if (data->sent) break;
 
+            size_t uuid_len = strlen((char *)data->uuid);
+            if (uuid_len != 32) {
+                fprintf(stderr, "UUID inválido: %s (comprimento: %zu, esperado: 32)\n",
+                        data->uuid, uuid_len);
+                break;
+            }
+            printf("DATA->UUID 2: %s\n", data->uuid);
+
+            printf("data->idToken: %s\n", data->idToken);
+
             StunHeader header = create_stun_request(data->uuid);
             
-            // Cria o JSON
             cJSON *json = stun_header_to_json(&header);
+            if (!json) {
+                fprintf(stderr, "Falha ao criar JSON\n");
+                break;
+            }
             cJSON_AddStringToObject(json, "auth_id", data->idToken);
 
             // Serializa pra string
             char *json_str = cJSON_PrintUnformatted(json);
+            if (!json_str) {
+                fprintf(stderr, "cJSON_PrintUnformatted retornou NULL\n");
+                cJSON_Delete(json);
+                break;
+            }
 
-            printf("%s\n", json_str);
+            // Verifica o conteúdo de json_str
+            printf("JSON string: %s\n", json_str);
+            printf("Primeiros 50 bytes de json_str: ");
+            for (int i = 0; i < 50 && json_str[i] != '\0'; i++) {
+                printf("%02x ", (unsigned char)json_str[i]);
+            }
+            printf("\n");
 
-            printf("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\n");
+            // Calcula o tamanho da string
+            size_t len = strlen(json_str);
+            printf("Tamanho calculado por strlen: %zu\n", len);
+
+            // Verifica o tamanho antes de copiar
+            if (len > 1500) {
+                fprintf(stderr, "JSON muito grande: %zu bytes\n", len);
+                cJSON_Delete(json);
+                free(json_str);
+                break;
+            }
 
             // Envia pela WebSocket
-            unsigned char buf[LWS_PRE + 1024];
-            size_t len = strlen(json_str);
+            unsigned char buf[LWS_PRE + 2048];
             memcpy(&buf[LWS_PRE], json_str, len);
 
-            printf("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD\n");
-
-            if (data->idToken == NULL) {
-                fprintf(stderr, "idToken está NULL!\n");
-                break;
-            }
-
-            if (json_str == NULL) {
-                fprintf(stderr, "json_str está NULL!\n");
-                break;
-            }
-
-            if (len > 1024) {
-                fprintf(stderr, "JSON muito grande: %zu bytes\n", len);
-                break;
-            }
-
+            // Envia os dados
             lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
-
-            printf("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
 
             // Libera memória
             cJSON_Delete(json);
             free(json_str);
-
-            printf("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
 
             data->sent = 1;
 
@@ -113,7 +125,18 @@ static struct lws_protocols protocols[] = {
     { NULL, NULL, 0, 0 } // fim da lista
 };
 
-int verifyUUIDreceived(unsigned char* uuid, char* idToken) {
+int verifyUUIDreceived(const char* uuid, char* idToken) {
+    if (!uuid || !idToken) {
+        fprintf(stderr, "uuid ou idToken é NULL\n");
+        return 0;
+    }
+
+    // Valida o comprimento do UUID
+    size_t uuid_len = strlen(uuid);
+    if (uuid_len != 32) {
+        fprintf(stderr, "UUID inválido: %s (comprimento: %zu, esperado: 32)\n", uuid, uuid_len);
+        return 0;
+    }
 
     struct lws_context_creation_info context_info = {0};
     struct lws_client_connect_info connect_info = {0};
@@ -135,18 +158,35 @@ int verifyUUIDreceived(unsigned char* uuid, char* idToken) {
     connect_info.host = connect_info.address;
     connect_info.origin = connect_info.address;
     connect_info.protocol = protocols[0].name;
-    connect_info.ssl_connection = 0;  // sem wss
-
+    connect_info.ssl_connection = 0; // sem wss
 
     struct lws *wsi = lws_client_connect_via_info(&connect_info);
     if (!wsi) {
         fprintf(stderr, "Erro ao conectar ao servidor WebSocket\n");
+        lws_context_destroy(context);
         return 0;
     }
 
     session_data_t *data = (session_data_t *)lws_wsi_user(wsi);
-    memcpy(data->uuid, uuid, 16);
+    if (!data) {
+        fprintf(stderr, "session_data_t não inicializado\n");
+        lws_context_destroy(context);
+        return 0;
+    }
+
+    // Copia o UUID com terminador nulo
+    strncpy((char *)data->uuid, uuid, 32);
+    data->uuid[32] = '\0'; // Garante terminador nulo
+
+    printf("UUID: %s\n", uuid);
+    printf("DATA->UUID: %s\n", data->uuid);
+
+    // Copia o idToken com terminador nulo
     strncpy(data->idToken, idToken, sizeof(data->idToken) - 1);
+    data->idToken[sizeof(data->idToken) - 1] = '\0'; // Garante terminador nulo
+
+    printf("DATA->idToken: %s\n", data->idToken);
+
     data->sent = 0;
 
     while (!interrupted) {
@@ -233,36 +273,51 @@ int main() {
                 printf("idToken: %s\n", token_str);
             } else {
                 printf("idToken não encontrado ou inválido.\n");
+                cJSON_Delete(root);
+                continue;
             }
 
-            cJSON *uuidArray = cJSON_GetObjectItem(root, "uuid");
-            unsigned char uuid[16];
-            int i = 0;
+            cJSON *uuidItem = cJSON_GetObjectItem(root, "uuid");
+            const char* uuid_hex;
 
-            if (cJSON_IsArray(uuidArray)) {
-                cJSON *byte = NULL;
-                cJSON_ArrayForEach(byte, uuidArray) {
-                    if (i < 16 && cJSON_IsNumber(byte)) {
-                        uuid[i++] = (unsigned char)byte->valueint;
+            if (cJSON_IsString(uuidItem) && uuidItem->valuestring != NULL) {
+                uuid_hex = uuidItem->valuestring;
+                if (strlen(uuid_hex) != 32) {
+                    printf("Erro: UUID deve ser uma string de 32 caracteres hexadecimais\n");
+                    cJSON_Delete(root); 
+                    continue;
+                }
+
+                // Verifica se é um formato hexadecimal válido (apenas 0-9, a-f, A-F)
+                for (int i = 0; i < 32; i++) {
+                    char c = uuid_hex[i];
+                    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+                        printf("Erro: UUID contém caracteres não hexadecimais\n");
+                        cJSON_Delete(root); 
+                        continue;
                     }
                 }
 
-                printf("UUID (hex): ");
-                for (int j = 0; j < i; j++) {
-                    printf("%02x ", uuid[j]);
-                }
-                printf("\n");
+                // Imprime a string UUID para depuração
+                printf("UUID (hex): %s\n", uuid_hex);
 
-                if (!verifyUUIDreceived(uuid, token_str)) {
-                    printf("Erro tentando salvar UUID");
-                }
+            } else {
+                printf("Erro: UUID deve ser uma string\n");
+                cJSON_Delete(root); 
+                continue;
+            }
+
+            // Passa a string hexadecimal diretamente para verifyUUIDreceived
+            if (!verifyUUIDreceived(uuid_hex, token_str)) {
+                printf("Erro tentando salvar UUID\n");
             }
 
             cJSON_Delete(root);
+
+            close(client_fd);
         }
     }
 
-    close(client_fd);
     close(server_fd);
 
     return 0;

@@ -19,35 +19,42 @@ StunHeader jsonToStunHeader(const crow::json::rvalue& json) {
     if (!json.has("length")) {
         throw std::runtime_error("Campo 'length' é obrigatório");
     }
-
     header.length = static_cast<uint16_t>(json["length"].i());
 
-    // Magic cookie é obrigatório
-    if(!json.has("magic_cookie")) {
+    // Magic cookie - obrigatório
+    if (!json.has("magic_cookie")) {
         throw std::runtime_error("Campo 'magic_cookie' é obrigatório");
     }
-    
     header.magic_cookie = static_cast<uint32_t>(json["magic_cookie"].i());
 
-    // UUID - obrigatório
+    std::cout << "ADASFMDFKAMSFAKSMASKD\n";
+
+    // UUID - obrigatório, agora como string hexadecimal
     if (!json.has("uuid")) {
         throw std::runtime_error("Campo 'uuid' é obrigatório");
     }
     std::string uuid_str = json["uuid"].s();
-    if (uuid_str.length() < 16) {
-        throw std::runtime_error("UUID deve ter pelo menos 16 bytes");
-    }
-    std::memcpy(header.uuid, uuid_str.data(), 16);
 
-    // Transaction ID - obrigatório
+    std::cout << uuid_str << std::endl;
+
+    if (uuid_str.length() != 32) { // 16 bytes * 2 (cada byte vira 2 chars hex)
+        throw std::runtime_error("UUID deve ter 32 caracteres hexadecimais");
+    } else {
+        std::cout << uuid_str.size() << std::endl;
+    }
+
+    std::cout << "ADASFMDFKAMSFAKSMASKD\n";
+    hex_to_bytes(uuid_str, header.uuid, 16);
+
+    // Transaction ID - obrigatório, agora como string hexadecimal
     if (!json.has("transaction_id")) {
         throw std::runtime_error("Campo 'transaction_id' é obrigatório");
     }
     std::string tid_str = json["transaction_id"].s();
-    if (tid_str.length() < 12) {
-        throw std::runtime_error("Transaction ID deve ter pelo menos 12 bytes");
+    if (tid_str.length() != 24) { // 12 bytes * 2 (cada byte vira 2 chars hex)
+        throw std::runtime_error("Transaction ID deve ter 24 caracteres hexadecimais");
     }
-    std::memcpy(header.transaction_id, tid_str.data(), 12);
+    hex_to_bytes(tid_str, header.transaction_id, 12);
 
     return header;
 }
@@ -56,44 +63,42 @@ StunHeader jsonNlohmannToStunHeader(const json& json) {
     StunHeader header{};
     
     // Type - obrigatório
-    if (!json.contains("type")) {
-        throw std::runtime_error("Campo 'type' é obrigatório");
+    if (!json.contains("type") || !json["type"].is_number_integer()) {
+        throw std::runtime_error("Campo 'type' é obrigatório e deve ser um inteiro");
     }   
     header.type = json["type"].get<uint16_t>();
 
     // Length - obrigatório
-    if (!json.contains("length")) {
-        throw std::runtime_error("Campo 'length' é obrigatório");
+    if (!json.contains("length") || !json["length"].is_number_integer()) {
+        throw std::runtime_error("Campo 'length' é obrigatório e deve ser um inteiro");
     }
-
     header.length = json["length"].get<uint16_t>();
 
-    // Magic cookie é obrigatório
-    if(!json.contains("magic_cookie")) {
-        throw std::runtime_error("Campo 'magic_cookie' é obrigatório");
+    // Magic cookie - obrigatório
+    if (!json.contains("magic_cookie") || !json["magic_cookie"].is_number_integer()) {
+        throw std::runtime_error("Campo 'magic_cookie' é obrigatório e deve ser um inteiro");
     }
-    
     header.magic_cookie = json["magic_cookie"].get<uint32_t>();
 
-    // UUID - obrigatório
-    if (!json.contains("uuid") && json["uuid"].is_string()) {
-        throw std::runtime_error("Campo 'uuid' é obrigatório");
+    // UUID - obrigatório, agora como string hexadecimal
+    if (!json.contains("uuid") || !json["uuid"].is_string()) {
+        throw std::runtime_error("Campo 'uuid' é obrigatório e deve ser uma string");
     }
     std::string uuid_str = json["uuid"].get<std::string>();
-    if (uuid_str.length() < 16) {
-        throw std::runtime_error("UUID deve ter pelo menos 16 bytes");
+    if (uuid_str.length() != 32) { // 16 bytes * 2 (cada byte vira 2 chars hex)
+        throw std::runtime_error("UUID deve ter 32 caracteres hexadecimais");
     }
-    std::memcpy(header.uuid, uuid_str.data(), 16);
+    hex_to_bytes(uuid_str, header.uuid, 16);
 
-    // Transaction ID - obrigatório
-    if (!json.contains("transaction_id") && json["transaction_id"].is_string()) {
-        throw std::runtime_error("Campo 'transaction_id' é obrigatório");
+    // Transaction ID - obrigatório, agora como string hexadecimal
+    if (!json.contains("transaction_id") || !json["transaction_id"].is_string()) {
+        throw std::runtime_error("Campo 'transaction_id' é obrigatório e deve ser uma string");
     }
     std::string tid_str = json["transaction_id"].get<std::string>();
-    if (tid_str.length() < 12) {
-        throw std::runtime_error("Transaction ID deve ter pelo menos 12 bytes");
+    if (tid_str.length() != 24) { // 12 bytes * 2 (cada byte vira 2 chars hex)
+        throw std::runtime_error("Transaction ID deve ter 24 caracteres hexadecimais");
     }
-    std::memcpy(header.transaction_id, tid_str.data(), 12);
+    hex_to_bytes(tid_str, header.transaction_id, 12);
 
     return header;
 }
@@ -115,13 +120,11 @@ crow::json::wvalue stunHeaderToJson(const StunHeader& header) {
     // Magic Cookie
     json["magic_cookie"] = header.magic_cookie;
 
-    // UUID como string original
-    std::string uuid_str(reinterpret_cast<const char*>(header.uuid), 16);
-    json["uuid"] = uuid_str;
+    // UUID como string hexadecimal
+    json["uuid"] = bytes_to_hex(header.uuid, 16);
 
-    // Transaction ID como string original
-    std::string tid_str(reinterpret_cast<const char*>(header.transaction_id), 12);
-    json["transaction_id"] = tid_str;
+    // Transaction ID como string hexadecimal
+    json["transaction_id"] = bytes_to_hex(header.transaction_id, 12);
 
     return json;
 }
@@ -139,11 +142,9 @@ json stunHeaderToJsonNlohmann(const StunHeader& header) {
 
     j["magic_cookie"] = header.magic_cookie;
 
-    std::string uuid_str(reinterpret_cast<const char*>(header.uuid), 16);
-    j["uuid"] = uuid_str;
+    j["uuid"] = bytes_to_hex(header.uuid, 16);
 
-    std::string tid_str(reinterpret_cast<const char*>(header.transaction_id), 12);
-    j["transaction_id"] = tid_str;
+    j["transaction_id"] = bytes_to_hex(header.transaction_id, 12);
 
     return j;
 }
@@ -290,16 +291,27 @@ std::string base64_decode(const std::string& encoded_string) {
     return decoded_data;
 }
 
-json toFirestoreMap(const json& plainMap) {
-    json fields;
-    for (auto& [key, value] : plainMap.items()) {
-        fields[key] = {
-            {"stringValue", value}
-        };
+void hex_to_bytes(const std::string& hex, uint8_t* output, size_t output_len) {
+    if (hex.length() < output_len * 2) {
+        throw std::runtime_error("String hexadecimal muito curta");
     }
-    return {
-        {"mapValue", {
-            {"fields", fields}
-        }}
-    };
+    for (size_t i = 0; i < output_len; ++i) {
+        std::string byte_str = hex.substr(i * 2, 2);
+        try {
+            output[i] = static_cast<uint8_t>(std::stoi(byte_str, nullptr, 16));
+        } catch (...) {
+            throw std::runtime_error("Formato hexadecimal inválido");
+        }
+    }
+}
+
+std::string bytes_to_hex(const uint8_t* input, size_t len) {
+    std::string result;
+    result.reserve(len * 2);
+    const char hex_chars[] = "0123456789abcdef";
+    for (size_t i = 0; i < len; ++i) {
+        result += hex_chars[(input[i] >> 4) & 0x0F]; // Nibble superior
+        result += hex_chars[input[i] & 0x0F];       // Nibble inferior
+    }
+    return result;
 }

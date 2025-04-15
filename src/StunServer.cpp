@@ -106,6 +106,7 @@ crow::response StunServer::handlePost(const crow::request& req) {
     try {
         stunRequest = jsonToStunHeader(json_body);
     } catch(const std::exception& e) {
+        std::cout << "Header received Invalid\n";
         return crow::response(400, "header received invalid");
     }
 
@@ -129,6 +130,7 @@ crow::response StunServer::handlePost(const crow::request& req) {
 
     }
 
+    std::cout << "Cheguei aqui\n";
     // ------------------------- verificação do tipo de request ----------------------------
 
     return this->detectRequestType(stunRequest, &auth_id, nullptr, clientIp);;
@@ -144,6 +146,17 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
     switch (stunRequest.type)
     {
     case 0x0001: // binding request
+
+        std::cout << authId << std::endl;
+
+        if(authId == nullptr) {
+            return crow::response(400, "Missing auth ID");
+        }
+
+        // precisa ativar quando vincular com o dart
+        if(!firebaseManager->verifyGoogleIdToken(*authId)) {
+            return crow::response(400, "Auth ID invalid");
+        }    
 
         return this->clientBind(stunRequest, conn);
     
@@ -183,7 +196,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
     std::cout << "Entro no clientBind\n";
 
-    std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
+    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
 
     /* // verificação se o uuid existe no firebase
     if(!firebaseManager.verifyUuidExist(uuid)) {
@@ -195,20 +208,24 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
     int statusCode = 0;
 
     if(webSocketManager.get_connection(uuid) == nullptr) {
-        webSocketManager.add(uuid, conn, stunRequest);
+        // webSocketManager.add(uuid, conn, stunRequest);
         std::cout << "UUID registrado: " << uuid << std::endl;
 
-        j = {{"status", "success"}, {"message", "UUID registrado: " + uuid}};
-        statusCode = 200;
+        /*
+            j = {{"status", "success"}, {"message", "UUID registrado: " + uuid}};
+            statusCode = 200;
 
-        conn->send_text(j.dump());
+            conn->send_text(j.dump());
+        */
     } else {
         std::cout << "UUID já registrado: " << uuid << std::endl;
 
-        j = {{"status", "error"}, {"message", "UUID já está em uso"}};
-        statusCode = 400;
+        /*
+            j = {{"status", "error"}, {"message", "UUID já está em uso"}};
+            statusCode = 400;
 
-        conn->send_text(j.dump());
+            conn->send_text(j.dump());
+        */
     }
 
     return crow::response(statusCode, j.dump());
@@ -287,7 +304,6 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
         return crow::response(400, "Autenticação do Google inválida");
     }
 
-    // Gera o UUID e converte pra base64
     generateUUIDBytes(stunRequest.uuid);
 
     return crow::response(200, stunHeaderToJson(stunRequest));
