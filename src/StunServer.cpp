@@ -147,18 +147,7 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
     {
     case 0x0001: // binding request
 
-        std::cout << authId << std::endl;
-
-        if(authId == nullptr) {
-            return crow::response(400, "Missing auth ID");
-        }
-
-        // precisa ativar quando vincular com o dart
-        if(!firebaseManager->verifyGoogleIdToken(*authId)) {
-            return crow::response(400, "Auth ID invalid");
-        }    
-
-        return this->clientBind(stunRequest, conn);
+        return this->clientBind(stunRequest, conn, authId);
     
     case 0x0002: // ip request 
 
@@ -178,10 +167,6 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         // transformar isso em uma função 
 
-        std::cout << "Receive uuid request\n";
-    
-        std::cout << authId << std::endl;
-
         return this->uuidResponse(stunRequest, authId);
 
     default:
@@ -192,17 +177,22 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
     return crow::response(200, "testando post");
 }
 
-crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn) {
+crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
+
+    std::string localId;
+
+    if(authId == nullptr) {
+        return crow::response(400, "Missing auth ID");
+    }
+
+    // precisa ativar quando vincular com o dart
+    if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
+        return crow::response(400, "Auth ID invalid");
+    }
 
     std::cout << "Entro no clientBind\n";
 
-    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
-
-    /* // verificação se o uuid existe no firebase
-    if(!firebaseManager.verifyUuidExist(uuid)) {
-        return crow::response(400, "uuid não disponível")  
-    }
-    */
+    std::string uuid = base64_encode(stunRequest.uuid, 16);
 
     json j;
     int statusCode = 0;
@@ -211,21 +201,25 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         // webSocketManager.add(uuid, conn, stunRequest);
         std::cout << "UUID registrado: " << uuid << std::endl;
 
-        /*
-            j = {{"status", "success"}, {"message", "UUID registrado: " + uuid}};
-            statusCode = 200;
-
+        if(!addRouterToUser(localId, uuid)) {
+            j = {{"status", "error"}, {"message", "Erro ao adicionar roteador ao Firebase"}};
             conn->send_text(j.dump());
-        */
+            statusCode = 400;
+            crow::response(statusCode, j.dump());
+        }
+
+        j = {{"status", "success"}, {"message", bytes_to_hex(stunRequest.uuid, 16)}};
+        statusCode = 200;
+
+        conn->send_text(j.dump());
+
     } else {
         std::cout << "UUID já registrado: " << uuid << std::endl;
 
-        /*
-            j = {{"status", "error"}, {"message", "UUID já está em uso"}};
-            statusCode = 400;
+        j = {{"status", "error"}, {"message", "UUID já está em uso"}};
+        statusCode = 400;
 
-            conn->send_text(j.dump());
-        */
+        conn->send_text(j.dump());
     }
 
     return crow::response(statusCode, j.dump());
@@ -296,10 +290,9 @@ crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::s
 }
 
 crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* authId) {
-    std::string localId;
 
     // Verifica o token do Google e pega o localId
-    if (!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
+    if (!firebaseManager->verifyGoogleIdToken(*authId)) {
         std::cout << "Não foi possível autenticar cliente\n";
         return crow::response(400, "Autenticação do Google inválida");
     }
@@ -332,7 +325,11 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
             if (j.contains("auth_id")) {
 
                 std::string auth_id;
-                auth_id = j["auth_id"].dump();
+                auth_id = j["auth_id"].get<std::string>();
+
+                std::cout << "||||||||||||||||||||||||||||||\n";
+                std::cout << auth_id;
+
                 this->detectRequestType(stunRequest, &auth_id, &conn, nullptr);
 
             } else {

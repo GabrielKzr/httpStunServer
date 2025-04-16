@@ -17,6 +17,34 @@ typedef struct {
     int sent;  // Flag para evitar envio múltiplo
 } session_data_t;
 
+int save_uuid_file(uint8_t *uuid_hex_str) {
+    FILE *fp = fopen("uuid.txt", "wb");  // ainda em modo binário, mas salva string
+    if (!fp) {
+        perror("Erro ao abrir uuid.txt para escrita");
+        return 0;
+    }
+
+    size_t len = strlen((char *)uuid_hex_str);
+    if (len != 32) {
+        fprintf(stderr, "UUID inválido, tamanho esperado: 32, obtido: %zu\n", len);
+        fclose(fp);
+        return 0;
+    }
+
+    // Debug: imprime os 32 caracteres
+    printf("UUID em hexa (string): %s\n", uuid_hex_str);
+
+    // Salva a string como está (32 bytes ASCII)
+    size_t written = fwrite(uuid_hex_str, 1, 32, fp);
+    fclose(fp);
+
+    if (written != 32) {
+        fprintf(stderr, "Erro: apenas %zu bytes foram escritos\n", written);
+        return 0;
+    }
+
+    return 1;
+}
 static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason,
                                void *user, void *in, size_t len) {
     switch (reason) {
@@ -93,10 +121,48 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
             break;
         }
 
-        case LWS_CALLBACK_CLIENT_RECEIVE:
-            printf("[client] Recebido: %.*s\n", (int)len, (char *)in);
-            interrupted = 1;
+        case LWS_CALLBACK_CLIENT_RECEIVE: {
+
+            char *msg = (char *)malloc(len + 1);
+            if (!msg) break;
+
+            memcpy(msg, in, len);
+            msg[len] = '\0'; // Garante terminação
+
+            printf("[RECEBIDO] Mensagem do servidor:\n%s\n", msg);
+
+            cJSON *json = cJSON_Parse((char*)in);
+            if (!json) {
+                fprintf(stderr, "Erro ao parsear JSON recebido!\n");
+                free(msg);
+                break;
+            }
+
+            cJSON *status = cJSON_GetObjectItemCaseSensitive(json, "status");
+            if (cJSON_IsString(status) && status->valuestring != NULL) {
+                if (strcmp(status->valuestring, "success") == 0) {
+
+                    cJSON *uuid = cJSON_GetObjectItemCaseSensitive(json, "message");
+
+                    if(!save_uuid_file((uint8_t*)uuid->valuestring)) {                        
+                        printf("Erro ao salvar uuid no arquivo");
+                        exit(0);
+                    }
+
+                } else if (strcmp(status->valuestring, "error") == 0) {
+                    printf("Erro ao registrar UUID!\n");
+                } else {
+                    printf("Status desconhecido: %s\n", status->valuestring);
+                }
+            } else {
+                printf("Campo 'status' não encontrado ou não é string.\n");
+            }
+
+            cJSON_Delete(json);
+            free(msg);            
+
             break;
+        }
 
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
             fprintf(stderr, "[client] Erro na conexão\n");
