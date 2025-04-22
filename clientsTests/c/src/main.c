@@ -18,7 +18,17 @@ typedef struct {
 } session_data_t;
 
 int save_uuid_file(uint8_t *uuid_hex_str) {
-    FILE *fp = fopen("uuid.txt", "wb");  // ainda em modo binário, mas salva string
+
+    const char *filename = "uuid.txt";
+
+    if (access(filename, F_OK) == 0) {
+        printf("Arquivo %s já existe. Não será sobrescrito.\n", filename);
+        return 0;
+    }
+
+    printf("Arquivo não tava aberto ainda\n");
+
+    FILE *fp = fopen(filename, "wb");  // ainda em modo binário, mas salva string
     if (!fp) {
         perror("Erro ao abrir uuid.txt para escrita");
         return 0;
@@ -38,6 +48,8 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
     size_t written = fwrite(uuid_hex_str, 1, 32, fp);
     fclose(fp);
 
+    printf("VALORES SALVOSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+
     if (written != 32) {
         fprintf(stderr, "Erro: apenas %zu bytes foram escritos\n", written);
         return 0;
@@ -45,6 +57,7 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
 
     return 1;
 }
+
 static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason,
                                void *user, void *in, size_t len) {
     switch (reason) {
@@ -68,7 +81,7 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
 
             printf("data->idToken: %s\n", data->idToken);
 
-            StunHeader header = create_stun_request(data->uuid);
+            StunHeader header = create_stun_request(data->uuid, 0x0001);
             
             cJSON *json = stun_header_to_json(&header);
             if (!json) {
@@ -124,7 +137,7 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
         case LWS_CALLBACK_CLIENT_RECEIVE: {
 
             char *msg = (char *)malloc(len + 1);
-            if (!msg) break;
+            if (!msg) exit(0);
 
             memcpy(msg, in, len);
             msg[len] = '\0'; // Garante terminação
@@ -135,7 +148,7 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
             if (!json) {
                 fprintf(stderr, "Erro ao parsear JSON recebido!\n");
                 free(msg);
-                break;
+                exit(0);
             }
 
             cJSON *status = cJSON_GetObjectItemCaseSensitive(json, "status");
@@ -143,11 +156,48 @@ static int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason
                 if (strcmp(status->valuestring, "success") == 0) {
 
                     cJSON *uuid = cJSON_GetObjectItemCaseSensitive(json, "message");
+                    cJSON *authId = cJSON_GetObjectItemCaseSensitive(json, "auth_id");
+
+                    if(uuid == NULL || authId == NULL) {
+                        printf("Erro, json recebido inválido");
+                        exit(0);
+                    }
 
                     if(!save_uuid_file((uint8_t*)uuid->valuestring)) {                        
                         printf("Erro ao salvar uuid no arquivo");
                         exit(0);
+                    } else {
+
+                        StunHeader header = create_stun_request((uint8_t *)uuid->valuestring, 0x0004);
+
+                        cJSON *json_send = stun_header_to_json(&header);
+                        if (!json_send) {
+                            fprintf(stderr, "Falha ao criar JSON\n");
+                            exit(0);
+                        }
+                        cJSON_AddStringToObject(json_send, "auth_id", authId->valuestring);
+
+                        char *json_str = cJSON_PrintUnformatted(json_send);
+                        if (!json_str) {
+                            fprintf(stderr, "cJSON_PrintUnformatted retornou NULL\n");
+                            cJSON_Delete(json_send);
+                            exit(0);
+                        }
+
+                        size_t len = strlen(json_str);
+
+                        unsigned char buf[LWS_PRE + 2048];
+                        memcpy(&buf[LWS_PRE], json_str, len);
+
+                        lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
+
+                        free(json_str);
+                        cJSON_Delete(json_send);
                     }
+
+                } else if (strcmp(status->valuestring, "connected") == 0) {
+
+                    printf("Processo de setup completo\n");
 
                 } else if (strcmp(status->valuestring, "error") == 0) {
                     printf("Erro ao registrar UUID!\n");

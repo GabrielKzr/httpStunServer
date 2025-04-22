@@ -33,11 +33,11 @@ void fill_random_bytes(uint8_t* buf, size_t len) {
 }
 
 // Cria um STUN request a partir de um UUID
-StunHeader create_stun_request(const uint8_t* uuid) {
+StunHeader create_stun_request(const uint8_t* uuid, int type) {
     StunHeader header;
 
     // Define campos básicos
-    header.type = 0x0001; // Binding Request (exemplo)
+    header.type = type; // Binding Request (exemplo)
     header.length = 0; // Suponha sem atributos
     header.magic_cookie = MAGIC_COOKIE;
 

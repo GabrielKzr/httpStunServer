@@ -1,9 +1,18 @@
 #include "../include/WebSocketManager.hpp"
 
-void WebSocketManager::add(const std::string& uuid, crow::websocket::connection* conn, const StunHeader& header) {
+bool WebSocketManager::add(const std::string& uuid, crow::websocket::connection* conn, const StunHeader& header) {
     std::lock_guard<std::mutex> lock(mutex_);
+    
+    // Verifica se já existe uma conexão com o mesmo UUID
+    if (connections_.find(uuid) != connections_.end()) {
+        std::cout << "UUID já registrado: " << uuid << std::endl;
+        return false;
+    }
+
+    // Adiciona nova conexão
     connections_[uuid] = {conn, {}, header}; // Inicializa connInfo com a conexão e um vetor vazio
     std::cout << "UUID registrado: " << uuid << std::endl;
+    return true;
 }
 
 void WebSocketManager::remove(const std::string& uuid_str) {

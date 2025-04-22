@@ -25,7 +25,7 @@ private:
 
 public:
 
-    void add(const std::string& uuid, crow::websocket::connection* conn, const StunHeader& header);
+    bool add(const std::string& uuid, crow::websocket::connection* conn, const StunHeader& header);
     void remove(const std::string& uuid_str);
     void sendToUUID(const std::string& uuid, const std::string& message);
     void broadcast(const std::string& message);

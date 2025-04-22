@@ -147,7 +147,7 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
     {
     case 0x0001: // binding request
 
-        return this->clientBind(stunRequest, conn, authId);
+        return this->sendToRouter(stunRequest, conn, authId);
     
     case 0x0002: // ip request 
 
@@ -169,6 +169,10 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         return this->uuidResponse(stunRequest, authId);
 
+    case 0x0004:
+
+        return this->clientBind(stunRequest, conn, authId);
+
     default:
 
         return crow::response(404, "stun request type does not exist");
@@ -177,39 +181,79 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
     return crow::response(200, "testando post");
 }
 
+// aqui só entra depois que o roteador já confirmou a validade das informações (tudo validado com authId)
 crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
 
     std::string localId;
 
-    if(authId == nullptr) {
-        return crow::response(400, "Missing auth ID");
-    }
+    json j;
+    int statusCode = 0;
+
+    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+
+    std::cout << uuid << " até aq ta safe\n";
 
     // precisa ativar quando vincular com o dart
     if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
         return crow::response(400, "Auth ID invalid");
     }
 
+    if(!addRouterToUser(localId, uuid)) {
+        j = {{"status", "error"}, {"message", "Erro ao adicionar roteador ao Firebase"}};
+        conn->send_text(j.dump());
+        statusCode = 400;
+        crow::response(statusCode, j.dump());
+    }
+
     std::cout << "Entro no clientBind\n";
 
-    std::string uuid = base64_encode(stunRequest.uuid, 16);
+    if(webSocketManager.add(uuid, conn, stunRequest)) {
+
+        std::cout << "UUID registrado: " << uuid << std::endl;
+
+        j = {{"status", "connected"}, {"message", bytes_to_hex(stunRequest.uuid, 16)}};
+        statusCode = 200;
+
+        conn->send_text(j.dump());
+    } else {
+
+        std::cout << "UUID já registrado: " << uuid << std::endl;
+
+        j = {{"status", "error"}, {"message", "UUID já está em uso"}};
+        statusCode = 400;
+
+        conn->send_text(j.dump());
+    }
+
+    return crow::response(statusCode, j.dump());
+}
+
+// função que manda para roteador salvar uuid (não salva nada no servidor ainda)
+crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
+
+    if(authId == nullptr) {
+        return crow::response(400, "Missing auth ID");
+    }
+
+    if(!firebaseManager->verifyGoogleIdToken(*authId)) {
+        return crow::response(400, "Auth ID invalid");
+    }
+
+    std::cout << "Entro no sendToRouter\n";
 
     json j;
     int statusCode = 0;
 
+    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+
     if(webSocketManager.get_connection(uuid) == nullptr) {
-        // webSocketManager.add(uuid, conn, stunRequest);
+
         std::cout << "UUID registrado: " << uuid << std::endl;
 
-        if(!addRouterToUser(localId, uuid)) {
-            j = {{"status", "error"}, {"message", "Erro ao adicionar roteador ao Firebase"}};
-            conn->send_text(j.dump());
-            statusCode = 400;
-            crow::response(statusCode, j.dump());
-        }
-
-        j = {{"status", "success"}, {"message", bytes_to_hex(stunRequest.uuid, 16)}};
+        j = {{"status", "success"}, {"message", uuid}, {"auth_id", *authId}};
         statusCode = 200;
+
+        std::cout << "SEG FAULT AQ?\n";
 
         conn->send_text(j.dump());
 
@@ -221,6 +265,8 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         conn->send_text(j.dump());
     }
+
+    std::cout << "segfaultpassou\n";
 
     return crow::response(statusCode, j.dump());
 }
@@ -333,6 +379,8 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
                 this->detectRequestType(stunRequest, &auth_id, &conn, nullptr);
 
             } else {
+
+                std::cout << "Ta sem authId\n";
 
                 conn.send_text(json{{"status", "error"}, {"message", "Faltando auth_id"}}.dump());
                 this->detectRequestType(stunRequest, nullptr, &conn, nullptr);
