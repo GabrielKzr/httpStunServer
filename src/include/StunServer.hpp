@@ -79,7 +79,8 @@ class StunServer {
         // funções de webSocket
         void handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary);
 
-        bool addRouterToUser(const std::string& localId, const std::string& uuid_base64);
+        bool addRouterToUser(const std::string& localId, const std::string& uuid, bool status);
+        bool handleWebSocketDisconnect();
 
         bool authClient(int sock);
 

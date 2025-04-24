@@ -235,7 +235,7 @@ bool FirebaseManager::getFirebaseAccessToken(const std::string& jsonPath) {
     auto jsonResp = nlohmann::json::parse(response);
     if (jsonResp.contains("access_token")) {
         firebaseAccessToken = jsonResp["access_token"];
-        std::cout << "Firebase access token: " << firebaseAccessToken << std::endl;
+        // std::cout << "Firebase access token: " << firebaseAccessToken << std::endl;
         return true;
     } else {
         std::cerr << "Resposta inválida:\n" << response << "\n";

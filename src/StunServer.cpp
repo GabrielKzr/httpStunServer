@@ -64,9 +64,15 @@ void StunServer::stunServerInit() {
         .onclose([this](crow::websocket::connection& conn, const std::string& reason, unsigned short) {
             std::string uuid = webSocketManager.get_uuid_by_connection(&conn);
             if (!uuid.empty()) {
+
+                // addRouterToUser(localId)
+
+                // PRECISA ALTERAR ESTRUTURA DE CONEXÕES PARA ARMAZENAR UID DE USUÁRIOS
+
                 webSocketManager.remove(uuid);
                 std::cout << "Conexão do UUID " << uuid << " fechada: " << reason << std::endl;
             }
+
         })
         .onerror([](crow::websocket::connection& conn, const std::string& error) {
             std::cerr << "Erro: " << error << std::endl;
@@ -198,7 +204,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         return crow::response(400, "Auth ID invalid");
     }
 
-    if(!addRouterToUser(localId, uuid)) {
+    if(!addRouterToUser(localId, uuid, true)) {
         j = {{"status", "error"}, {"message", "Erro ao adicionar roteador ao Firebase"}};
         conn->send_text(j.dump());
         statusCode = 400;
@@ -397,6 +403,10 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
     }
 }
 
+bool StunServer::handleWebSocketDisconnect() {
+
+}
+
 void StunServer::stunServerClose() {
     app.stop();
 }
@@ -407,7 +417,7 @@ StunServer::~StunServer() {
 
 // ============================================= F U N Ç Ã O  P A R A  S A L V A R  U U I D  N O  F I R E B A S E ============================================
 
-bool StunServer::addRouterToUser(const std::string& localId, const std::string& uuid_base64) {
+bool StunServer::addRouterToUser(const std::string& localId, const std::string& uuid, bool status) {
     // Faz o GET no documento do usuário
     std::string response = firebaseManager->sendRequest("users", localId, "", GET);
 
@@ -435,7 +445,7 @@ bool StunServer::addRouterToUser(const std::string& localId, const std::string& 
                 {"routers", {
                     {"mapValue", {
                         {"fields", {
-                            {uuid_base64, {
+                            {uuid, {
                                 {"mapValue", {
                                     {"fields", {
                                         {"type", {{"stringValue", "DM956_1800GT"}}}
@@ -488,10 +498,11 @@ bool StunServer::addRouterToUser(const std::string& localId, const std::string& 
                 }
 
                 // Adiciona o novo router ao mapa
-                currentRouters[uuid_base64] = {
+                currentRouters[uuid] = {
                     {"mapValue", {
                         {"fields", {
-                            {"type", {{"stringValue", "DM956_1800GT"}}}
+                            {"type", {{"stringValue", "DM956_1800GT"}}},
+                            {"activity", {{"booleanValue", status}}}
                         }}
                     }}
                 };
@@ -550,10 +561,11 @@ bool StunServer::addRouterToUser(const std::string& localId, const std::string& 
         }
 
         // Adiciona o novo router ao mapa
-        currentRouters[uuid_base64] = {
+        currentRouters[uuid] = {
             {"mapValue", {
                 {"fields", {
-                    {"type", {{"stringValue", "DM956_1800GT"}}}
+                    {"type", {{"stringValue", "DM956_1800GT"}}},
+                    {"activity", {{"booleanValue", status}}}
                 }}
             }}
         };
