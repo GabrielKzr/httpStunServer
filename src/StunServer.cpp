@@ -64,15 +64,62 @@ void StunServer::stunServerInit() {
         .onclose([this](crow::websocket::connection& conn, const std::string& reason, unsigned short) {
             std::string uuid = webSocketManager.get_uuid_by_connection(&conn);
             if (!uuid.empty()) {
-
-                // addRouterToUser(localId)
-
-                // PRECISA ALTERAR ESTRUTURA DE CONEXÕES PARA ARMAZENAR UID DE USUÁRIOS
-
                 webSocketManager.remove(uuid);
                 std::cout << "Conexão do UUID " << uuid << " fechada: " << reason << std::endl;
-            }
 
+            try {
+                // 1. Faz GET de todos os usuários
+                std::string response = firebaseManager->sendRequest("users", "", "", GET);
+                nlohmann::json jsonData = nlohmann::json::parse(response);
+
+                // 2. Verifica se o JSON tem a chave "documents"
+                if (!jsonData.contains("documents")) {
+                    std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+                    return;
+                }
+
+                // 3. Itera sobre os documentos
+                for (const auto& user : jsonData["documents"]) {
+                    if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
+                        continue;
+                    }
+
+                    auto routers = user["fields"]["routers"]["mapValue"]["fields"];
+                    
+                    if (routers.contains(uuid)) {
+                        // Extrai o userId do campo 'name'
+                        std::string fullPath = user["name"];
+                        std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+
+                        // 4. Monta o corpo do PATCH corretamente para atualizar apenas o campo activity
+                        nlohmann::json patchData = {
+                            {"fields", {
+                                {"routers", {
+                                    {"mapValue", {
+                                        {"fields", {
+                                            {uuid, {
+                                                {"mapValue", {
+                                                    {"fields", {
+                                                        {"activity", {{"booleanValue", false}}}
+                                                    }
+                                                }}
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }};
+
+                        // 5. Envia o PATCH para atualizar apenas o campo activity
+                        firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
+                        std::cout << "Atualizado 'activity = false' para roteador " << uuid << " do usuário " << userId << std::endl;
+                        break;
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Erro: " << e.what() << std::endl;
+            }
+            }
         })
         .onerror([](crow::websocket::connection& conn, const std::string& error) {
             std::cerr << "Erro: " << error << std::endl;
@@ -302,8 +349,6 @@ crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std:
         return crow::response(400, "Number os ips for this client excceeded");
     }
 
-
-
     // só fazer o ip exchange ...
 
     return this->exchangeIpPort(conn, port, clientIp, stunRequest);
@@ -448,7 +493,8 @@ bool StunServer::addRouterToUser(const std::string& localId, const std::string& 
                             {uuid, {
                                 {"mapValue", {
                                     {"fields", {
-                                        {"type", {{"stringValue", "DM956_1800GT"}}}
+                                        {"type", {{"stringValue", "DM956_1800GT"}}},
+                                        {"activity", {{"booleanValue", status}}}
                                     }}
                                 }}
                             }}
