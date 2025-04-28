@@ -67,58 +67,50 @@ void StunServer::stunServerInit() {
                 webSocketManager.remove(uuid);
                 std::cout << "Conexão do UUID " << uuid << " fechada: " << reason << std::endl;
 
-            try {
-                // 1. Faz GET de todos os usuários
-                std::string response = firebaseManager->sendRequest("users", "", "", GET);
-                nlohmann::json jsonData = nlohmann::json::parse(response);
+                try {
+                    // 1. Faz GET de todos os usuários
+                    std::string response = firebaseManager->sendRequest("users", "", "", GET);
+                    nlohmann::json jsonData = nlohmann::json::parse(response);
 
-                // 2. Verifica se o JSON tem a chave "documents"
-                if (!jsonData.contains("documents")) {
-                    std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
-                    return;
-                }
-
-                // 3. Itera sobre os documentos
-                for (const auto& user : jsonData["documents"]) {
-                    if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
-                        continue;
+                    if (!jsonData.contains("documents")) {
+                        std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+                        return;
                     }
 
-                    auto routers = user["fields"]["routers"]["mapValue"]["fields"];
-                    
-                    if (routers.contains(uuid)) {
-                        // Extrai o userId do campo 'name'
-                        std::string fullPath = user["name"];
-                        std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+                    // 2. Itera sobre os documentos
+                    for (const auto& user : jsonData["documents"]) {
+                        if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
+                            continue;
+                        }
 
-                        // 4. Monta o corpo do PATCH corretamente para atualizar apenas o campo activity
-                        nlohmann::json patchData = {
-                            {"fields", {
-                                {"routers", {
-                                    {"mapValue", {
-                                        {"fields", {
-                                            {uuid, {
-                                                {"mapValue", {
-                                                    {"fields", {
-                                                        {"activity", {{"booleanValue", false}}}
-                                                    }
-                                                }}
-                                            }}
-                                        }}
-                                    }}
+                        // 3. Faz uma cópia COMPLETA dos routers do usuário
+                        nlohmann::json userData = user["fields"];
+                        auto& routers = userData["routers"]["mapValue"]["fields"];
+                        
+                        if (routers.contains(uuid)) {
+                            // 4. Atualiza apenas o router específico mantendo outros campos
+                            routers[uuid]["mapValue"]["fields"]["activity"] = {{"booleanValue", false}};
+
+                            // 5. Extrai o ID do usuário
+                            std::string fullPath = user["name"];
+                            std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+
+                            // 6. Monta o payload com TODOS os campos do usuário
+                            nlohmann::json patchData = {
+                                {"fields", {
+                                    {"routers", userData["routers"]},  // Envia todos os routers
                                 }}
-                            }}
-                        }};
+                            };
 
-                        // 5. Envia o PATCH para atualizar apenas o campo activity
-                        firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
-                        std::cout << "Atualizado 'activity = false' para roteador " << uuid << " do usuário " << userId << std::endl;
-                        break;
+                            // 7. Envia a requisição
+                            firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
+                            std::cout << "Router " << uuid << " atualizado. Activity: false (outros routers preservados)" << std::endl;
+                            break;
+                        }
                     }
+                } catch (const std::exception& e) {
+                    std::cerr << "Erro ao processar fechamento de conexão: " << e.what() << std::endl;
                 }
-            } catch (const std::exception& e) {
-                std::cerr << "Erro: " << e.what() << std::endl;
-            }
             }
         })
         .onerror([](crow::websocket::connection& conn, const std::string& error) {
@@ -446,10 +438,6 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
         std::cout << "Mensagem binária ignorada" << std::endl;
         conn.send_text(json{{"status", "error"}, {"message", "Apenas JSON (texto) é aceito"}}.dump());
     }
-}
-
-bool StunServer::handleWebSocketDisconnect() {
-
 }
 
 void StunServer::stunServerClose() {
