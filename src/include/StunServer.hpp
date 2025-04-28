@@ -80,12 +80,11 @@ class StunServer {
         void handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary);
 
         bool addRouterToUser(const std::string& localId, const std::string& uuid, bool status);
-        bool handleWebSocketDisconnect();
-
-        bool authClient(int sock);
+        bool handleWebSocketDisconnect(std::string uuid, std::string reason);
 
         crow::response detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp);
         crow::response clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
+        crow::response clientBind(StunHeader& stunRequest, crow::websocket::connection* conn);
         crow::response exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp);
         crow::response exchangeIpPort(connInfo *conn, int port, const std::string& clientIp, const StunHeader& stunRequest);
         crow::response uuidResponse(StunHeader& stunRequest, std::string* authId);

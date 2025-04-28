@@ -315,3 +315,23 @@ std::string bytes_to_hex(const uint8_t* input, size_t len) {
     }
     return result;
 }
+
+bool jsonContainsUUID(const nlohmann::json& j, const std::string& uuid) {
+    if (j.is_object()) {
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            if (it.key() == uuid) {
+                return true;
+            }
+            if (jsonContainsUUID(it.value(), uuid)) {
+                return true;
+            }
+        }
+    } else if (j.is_array()) {
+        for (const auto& item : j) {
+            if (jsonContainsUUID(item, uuid)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}

@@ -89,3 +89,44 @@ void bytes_to_hex(const uint8_t* input, size_t len, char* output) {
     }
     output[len * 2] = '\0'; // Terminador nulo
 }
+
+int save_uuid_file(uint8_t *uuid_hex_str) {
+
+    const char *filename = "uuid.txt";
+
+    if (access(filename, F_OK) == 0) {
+        printf("Arquivo %s já existe. Não será sobrescrito.\n", filename);
+        return 0;
+    }
+
+    printf("Arquivo não tava aberto ainda\n");
+
+    FILE *fp = fopen(filename, "wb");  // ainda em modo binário, mas salva string
+    if (!fp) {
+        perror("Erro ao abrir uuid.txt para escrita");
+        return 0;
+    }
+
+    size_t len = strlen((char *)uuid_hex_str);
+    if (len != 32) {
+        fprintf(stderr, "UUID inválido, tamanho esperado: 32, obtido: %zu\n", len);
+        fclose(fp);
+        return 0;
+    }
+
+    // Debug: imprime os 32 caracteres
+    printf("UUID em hexa (string): %s\n", uuid_hex_str);
+
+    // Salva a string como está (32 bytes ASCII)
+    size_t written = fwrite(uuid_hex_str, 1, 32, fp);
+    fclose(fp);
+
+    printf("VALORES SALVOSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+
+    if (written != 32) {
+        fprintf(stderr, "Erro: apenas %zu bytes foram escritos\n", written);
+        return 0;
+    }
+
+    return 1;
+}

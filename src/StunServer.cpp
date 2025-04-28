@@ -63,61 +63,68 @@ void StunServer::stunServerInit() {
         })
         .onclose([this](crow::websocket::connection& conn, const std::string& reason, unsigned short) {
             std::string uuid = webSocketManager.get_uuid_by_connection(&conn);
-            if (!uuid.empty()) {
-                webSocketManager.remove(uuid);
-                std::cout << "Conexão do UUID " << uuid << " fechada: " << reason << std::endl;
-
-                try {
-                    // 1. Faz GET de todos os usuários
-                    std::string response = firebaseManager->sendRequest("users", "", "", GET);
-                    nlohmann::json jsonData = nlohmann::json::parse(response);
-
-                    if (!jsonData.contains("documents")) {
-                        std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
-                        return;
-                    }
-
-                    // 2. Itera sobre os documentos
-                    for (const auto& user : jsonData["documents"]) {
-                        if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
-                            continue;
-                        }
-
-                        // 3. Faz uma cópia COMPLETA dos routers do usuário
-                        nlohmann::json userData = user["fields"];
-                        auto& routers = userData["routers"]["mapValue"]["fields"];
-                        
-                        if (routers.contains(uuid)) {
-                            // 4. Atualiza apenas o router específico mantendo outros campos
-                            routers[uuid]["mapValue"]["fields"]["activity"] = {{"booleanValue", false}};
-
-                            // 5. Extrai o ID do usuário
-                            std::string fullPath = user["name"];
-                            std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
-
-                            // 6. Monta o payload com TODOS os campos do usuário
-                            nlohmann::json patchData = {
-                                {"fields", {
-                                    {"routers", userData["routers"]},  // Envia todos os routers
-                                }}
-                            };
-
-                            // 7. Envia a requisição
-                            firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
-                            std::cout << "Router " << uuid << " atualizado. Activity: false (outros routers preservados)" << std::endl;
-                            break;
-                        }
-                    }
-                } catch (const std::exception& e) {
-                    std::cerr << "Erro ao processar fechamento de conexão: " << e.what() << std::endl;
-                }
-            }
+            handleWebSocketDisconnect(uuid, reason);
         })
         .onerror([](crow::websocket::connection& conn, const std::string& error) {
             std::cerr << "Erro: " << error << std::endl;
         });
 
     app.port(this->port).multithreaded().run();
+}
+
+
+bool StunServer::handleWebSocketDisconnect(std::string uuid, std::string reason) {
+    if (!uuid.empty()) {
+        webSocketManager.remove(uuid);
+        std::cout << "Conexão do UUID " << uuid << " fechada: " << reason << std::endl;
+
+        try {
+            // 1. Faz GET de todos os usuários
+            std::string response = firebaseManager->sendRequest("users", "", "", GET);
+            nlohmann::json jsonData = nlohmann::json::parse(response);
+
+            if (!jsonData.contains("documents")) {
+                std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+                return false;
+            }
+
+            // 2. Itera sobre os documentos
+            for (const auto& user : jsonData["documents"]) {
+                if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
+                    continue;
+                }
+
+                // 3. Faz uma cópia COMPLETA dos routers do usuário
+                nlohmann::json userData = user["fields"];
+                auto& routers = userData["routers"]["mapValue"]["fields"];
+                
+                if (routers.contains(uuid)) {
+                    // 4. Atualiza apenas o router específico mantendo outros campos
+                    routers[uuid]["mapValue"]["fields"]["activity"] = {{"booleanValue", false}};
+
+                    // 5. Extrai o ID do usuário
+                    std::string fullPath = user["name"];
+                    std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+
+                    // 6. Monta o payload com TODOS os campos do usuário
+                    nlohmann::json patchData = {
+                        {"fields", {
+                            {"routers", userData["routers"]},  // Envia todos os routers
+                        }}
+                    };
+
+                    // 7. Envia a requisição
+                    firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
+                    std::cout << "Router " << uuid << " atualizado. Activity: false (outros routers preservados)" << std::endl;
+                    break;
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Erro ao processar fechamento de conexão: " << e.what() << std::endl;
+        }
+    }
+
+    return false;
 }
 
 crow::response StunServer::handleRequest(const crow::request& req) {
@@ -218,12 +225,80 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         return this->clientBind(stunRequest, conn, authId);
 
+    case 0x0005:
+
+        return this->clientBind(stunRequest, conn);
+
     default:
 
         return crow::response(404, "stun request type does not exist");
     }
 
     return crow::response(200, "testando post");
+}
+
+crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn) {
+
+    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+
+    std::cout << "CLIENT BIND SEM AUTH\n";
+
+    try {
+        // 1. Faz GET de todos os usuários
+        std::string response = firebaseManager->sendRequest("users", "", "", GET);
+        nlohmann::json jsonData = nlohmann::json::parse(response);
+
+        if (!jsonData.contains("documents")) {
+            std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+            return crow::response(400, "error: não foi possível encontrar documento");
+        }
+
+        if (!jsonContainsUUID(jsonData, uuid)) {
+            std::cout << "UUID não encontrado no JSON!" << std::endl;
+            conn->close(); // fecha conexão, pois não está autenticada
+            return crow::response(400, "error: não foi possível encontrar uuid");
+        }
+
+        // 2. Itera sobre os documentos
+        for (const auto& user : jsonData["documents"]) {
+            if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
+                continue;
+            }
+
+            // 3. Faz uma cópia COMPLETA dos routers do usuário
+            nlohmann::json userData = user["fields"];
+            auto& routers = userData["routers"]["mapValue"]["fields"];
+            
+            if (routers.contains(uuid)) {
+                // 4. Atualiza apenas o router específico mantendo outros campos
+                routers[uuid]["mapValue"]["fields"]["activity"] = {{"booleanValue", true}};
+
+                // 5. Extrai o ID do usuário
+                std::string fullPath = user["name"];
+                std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+
+                // 6. Monta o payload com TODOS os campos do usuário
+                nlohmann::json patchData = {
+                    {"fields", {
+                        {"routers", userData["routers"]},  // Envia todos os routers
+                    }}
+                };
+
+                // 7. Envia a requisição
+                firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
+                std::cout << "Router " << uuid << " atualizado. Activity: false (outros routers preservados)" << std::endl;
+                break;
+            }
+        }
+
+        webSocketManager.add(uuid, conn, stunRequest);
+
+        return crow::response(200, "success: status de roteador atualizado com sucesso");
+
+    } catch (const std::exception& e) {
+        std::cerr << "Erro ao processar fechamento de conexão: " << e.what() << std::endl;
+        return crow::response(400, "error: Erro ao comunicar com o Firebase");
+    }
 }
 
 // aqui só entra depois que o roteador já confirmou a validade das informações (tudo validado com authId)
@@ -236,8 +311,6 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
     std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
 
-    std::cout << uuid << " até aq ta safe\n";
-
     // precisa ativar quando vincular com o dart
     if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
         return crow::response(400, "Auth ID invalid");
@@ -249,8 +322,6 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         statusCode = 400;
         crow::response(statusCode, j.dump());
     }
-
-    std::cout << "Entro no clientBind\n";
 
     if(webSocketManager.add(uuid, conn, stunRequest)) {
 

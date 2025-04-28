@@ -1,3 +1,6 @@
+#ifndef STUNHEADERS_H
+#define STUNHEADERS_H
+
 #include <stdint.h>
 
 #define MAGIC_COOKIE 0x2112A442 // Magic Cookie do STUN utilizado para criptografar ip
@@ -20,3 +23,5 @@ typedef struct {
     uint8_t uuid[16]; // ID único de dispositivo
     uint8_t transaction_id[12]; // ID único para rastrear mensagens
 } StunHeader;
+
+#endif
