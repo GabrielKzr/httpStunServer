@@ -15,12 +15,18 @@ const char* methodToString(int method) {
 
 FirebaseManager::FirebaseManager(std::string project_id, std::string api_key, std::string pathToAdmJson) : FIREBASE_PROJECT_ID(std::move(project_id)), FIREBASE_API_KEY(std::move(api_key)) {
 
+    jsonPath = pathToAdmJson;
+    stopFlag = false;
+
     FIRESTORE_URL = "https://firestore.googleapis.com/v1/projects/" + FIREBASE_PROJECT_ID + "/databases/(default)/documents/";
     FIREBASE_VERIFY_TOKEN_URL = "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" + FIREBASE_API_KEY;
 
     if(!this->getFirebaseAccessToken(pathToAdmJson)) {
         throw std::runtime_error("Falha ao obter token de acesso Firebase");
     }
+
+    renewalThread = std::thread(&FirebaseManager::renewalLoop, this);
+    renewalThread.detach();
 }
 
 std::string FirebaseManager::sendRequest(const std::string& collection, const std::string& document, const std::string& jsonData, int method) {
@@ -242,4 +248,28 @@ bool FirebaseManager::getFirebaseAccessToken(const std::string& jsonPath) {
         firebaseAccessToken = "";
         return false;
     }
+}
+
+void FirebaseManager::renewalLoop() {
+    using namespace std::chrono;
+    while (!stopFlag) {
+        // calcula o ponto no tempo exato para próxima renovação:
+        auto next = system_clock::now() + minutes(57);
+        
+        // dorme até lá, mas acorda se stopFlag mudar
+        while (!stopFlag && system_clock::now() < next) {
+            std::this_thread::sleep_for(minutes(1));
+        }
+        
+        if (stopFlag) break;
+        
+        // renova o token
+        if (!getFirebaseAccessToken(jsonPath)) {
+            std::cerr << "Erro ao renovar token\n";
+        }
+    }
+}
+
+FirebaseManager::~FirebaseManager() {
+    stopFlag = true;
 }

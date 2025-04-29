@@ -7,6 +7,9 @@
 #include <fstream>
 #include <ctime>
 #include <jwt-cpp/jwt.h>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 #pragma once
 
@@ -29,8 +32,15 @@ public:
     std::string sendRequest(const std::string& collection, const std::string& document, const std::string& jsonData, int method);
     bool verifyGoogleIdToken(const std::string& idToken, std::string* outLocalId = nullptr);
     bool getFirebaseAccessToken(const std::string& jsonPath);
+    void renewalLoop();
+
+    ~FirebaseManager();
 
 private:
+
+    std::string jsonPath;
+    std::thread renewalThread;
+    std::atomic<bool> stopFlag;
 
     std::string FIREBASE_PROJECT_ID;
     std::string FIREBASE_API_KEY;

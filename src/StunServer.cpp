@@ -293,6 +293,8 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         webSocketManager.add(uuid, conn, stunRequest);
 
+        conn->send_text(json{{"status", "connected"}, {"message", "Conexão feita com sucesso"}}.dump());
+
         return crow::response(200, "success: status de roteador atualizado com sucesso");
 
     } catch (const std::exception& e) {
@@ -496,9 +498,7 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
 
                 std::cout << "Ta sem authId\n";
 
-                conn.send_text(json{{"status", "error"}, {"message", "Faltando auth_id"}}.dump());
                 this->detectRequestType(stunRequest, nullptr, &conn, nullptr);
-
             }
 
         } catch (const json::exception& e) {
