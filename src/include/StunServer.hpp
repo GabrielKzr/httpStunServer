@@ -89,6 +89,7 @@ class StunServer {
         crow::response exchangeIpPort(connInfo *conn, int port, const std::string& clientIp, const StunHeader& stunRequest);
         crow::response uuidResponse(StunHeader& stunRequest, std::string* authId);
         crow::response sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
+        crow::response removeClient(StunHeader& stunRequest, std::string* authId);
 
     public:
 

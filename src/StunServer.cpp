@@ -229,6 +229,10 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         return this->clientBind(stunRequest, conn);
 
+    case 0x0006:
+
+        return this->removeClient(stunRequest, authId);
+
     default:
 
         return crow::response(404, "stun request type does not exist");
@@ -462,6 +466,83 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
     generateUUIDBytes(stunRequest.uuid);
 
     return crow::response(200, stunHeaderToJson(stunRequest));
+}
+
+crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* authId) {
+
+    std::string localId;
+    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+
+    if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
+        std::cout << "Não foi possível autenticar cliente\n";
+        return crow::response(400, "Autenticação do Google inválida");
+    }
+
+    std::string response = firebaseManager->sendRequest("users", "", "", GET);
+    nlohmann::json jsonData = nlohmann::json::parse(response);
+
+    if (!jsonData.contains("documents")) {
+        std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+        return crow::response(400, "error: não foi possível encontrar documento");
+    }
+    
+    if (!jsonContainsUUID(jsonData, uuid)) {
+        std::cout << "UUID não encontrado no JSON!" << std::endl;
+        return crow::response(400, "error: não foi possível encontrar uuid");
+    }
+
+    for (const auto& user : jsonData["documents"]) {
+        if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
+            continue;
+        }
+
+        std::string docName = user["name"];
+        if (docName.size() >= localId.size() + 1 &&
+            docName.substr(docName.size() - localId.size() - 1) == "/" + localId) {
+
+            nlohmann::json userData = user["fields"];
+            auto& routers = userData["routers"]["mapValue"]["fields"];
+            
+            if (routers.contains(uuid)) {
+
+                std::string fullPath = user["name"];
+                std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+
+                routers.erase(uuid);
+
+                nlohmann::json patchData = {
+                    {"fields", {
+                        {"routers", userData["routers"]},  // Envia todos os routers
+                    }}
+                };
+
+                firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
+
+                auto conn = webSocketManager.get_connection(uuid);
+
+                conn->conn->send_text(json{{"status", "disconnected"}, {"message", "UUID desconectado"}}.dump());
+                conn->conn->close();
+
+                webSocketManager.remove(uuid);
+
+                return crow::response(200, "success: roteador removido com sucesso");
+
+            } else {
+
+                return crow::response(400, "error: roteador não disponível no servidor");
+
+            }
+        }
+    }
+
+    return crow::response(400, "error: usuário não disponível no sistema");
+
+
+    //    nlohmann::json userData = user["fields"];
+    //    auto routers = userData["routers"]["mapValue"]["fields"];
+
+
+
 }
 
 void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {
