@@ -58,6 +58,8 @@ int connectWithSavedUuid() {
 
     websocket_connect((char*)dados, NULL);
 
+    printf("BBBBBBBBBBBBBBBBBBBBBBBBBBB");
+
     return 1;
 }
 
@@ -188,8 +190,11 @@ int main() {
     // Antes de usar:
     srand(time(NULL));  // Só uma vez no começo do programa
 
-    if(!connectWithSavedUuid()) {
-        getUuidByServer();  
+    while (1)
+    {
+        if(!connectWithSavedUuid()) {
+            getUuidByServer();  
+        }
     }
 
     return 0;

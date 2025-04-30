@@ -2,7 +2,7 @@
 #include "src/include/StunHeaders.h"
 #include "src/include/Utils.h"
 
-int interrupted = 0;
+volatile int interrupted = 0;
 
 static struct lws_protocols protocols[] = {
     {
@@ -166,8 +166,29 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                     printf("Processo de setup completo\n");
 
-                } else if (strcmp(status->valuestring, "error") == 0) {
+                } else if (strcmp(status->valuestring, "disconnected") == 0) {
+                    
+                    printf("Roteador desconectado\n");
+
+                    remove_uuid_file();
+                    lws_close_reason(wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
+                    interrupted = 1; // <- adicione isso
+                    break;
+                    
+                }  else if (strcmp(status->valuestring, "absent") == 0) {
+
+                    printf("UUID não encontrado no Firebase!\n");
+                
+                    remove_uuid_file();
+                    lws_close_reason(wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
+                    interrupted = 1; // <- adicione isso
+                    break;
+
+                }  else if (strcmp(status->valuestring, "error") == 0) {
+                    interrupted = 1; // <- adicione isso
                     printf("Erro ao registrar UUID!\n");
+                    break; 
+
                 } else {
                     printf("Status desconhecido: %s\n", status->valuestring);
                 }
@@ -182,16 +203,24 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
         }
 
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
-            fprintf(stderr, "[client] Erro na conexão\n");
             interrupted = 1;
-            break;
+            exit(0);
 
+        case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE:
         case LWS_CALLBACK_CLOSED:
             printf("[client] Conexão fechada\n");
             interrupted = 1;
+            // acorda imediatamente o lws_service()
+            lws_cancel_service(lws_get_context(wsi));
             break;
 
+        case LWS_CALLBACK_CLIENT_CLOSED:
+            printf("[client] close detectado, interrompendo loop\n");
+            interrupted = 1;
+            exit(0);
+
         default:
+            printf("[client] Callback não tratado: %d\n", reason);
             break;
     }
 
@@ -199,6 +228,8 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
+
+    interrupted = 0;
 
     if (!uuid) {
         fprintf(stderr, "uuid ou idToken é NULL\n");
@@ -270,7 +301,11 @@ int websocket_connect(const char* uuid, char* idToken) {
         lws_service(context, 100);
     }
 
+    printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
+
     lws_context_destroy(context);
+
+    printf("BBBBBBBBBBBBBBBBBBBBBBBBBBB\n");
 
     return 1;
 }

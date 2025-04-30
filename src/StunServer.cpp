@@ -41,6 +41,8 @@ void StunServer::stunServerInit() {
 
     crow::SimpleApp app;
 
+    firebaseDataInit();
+
 // ---------------------- gerencia de requsições ----------------------
 
     CROW_ROUTE(app, "/")
@@ -72,6 +74,53 @@ void StunServer::stunServerInit() {
     app.port(this->port).multithreaded().run();
 }
 
+void StunServer::firebaseDataInit() {
+    
+    std::string response = firebaseManager->sendRequest("users", "", "", GET);
+    nlohmann::json jsonData = nlohmann::json::parse(response);
+
+    if (!jsonData.contains("documents")) {
+        std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+        return;
+    }
+
+    for (const auto& user : jsonData["documents"]) {
+        if (!user.is_object() || !user.contains("fields") || !user["fields"].contains("routers")) {
+            continue;
+        }
+
+        // 3. Faz uma cópia COMPLETA dos routers do usuário
+        nlohmann::json userData = user["fields"];
+        auto& routers = userData["routers"]["mapValue"]["fields"];
+        
+        bool updated = false; // Flag para verificar se algum router foi atualizado
+
+        // 4. Itera por cada uuid nos routers
+        for (auto& [uuid, router] : routers.items()) {
+            // Atualiza o campo activity para false
+            router["mapValue"]["fields"]["activity"] = {{"booleanValue", false}};
+            updated = true; // Marca que houve atualização
+        }
+
+        if (updated) {
+            // 5. Extrai o ID do usuário
+            std::string fullPath = user["name"];
+            std::string userId = fullPath.substr(fullPath.rfind('/') + 1);
+
+            // 6. Monta o payload com TODOS os campos do usuário
+            nlohmann::json patchData = {
+                {"fields", {
+                    {"routers", userData["routers"]},  // Envia todos os routers
+                }}
+            };
+
+            // 7. Envia a requisição
+            firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
+            std::cout << "Todos os routers do usuário " << userId << " atualizados. Activity: false" << std::endl;
+        }
+    }
+
+}
 
 bool StunServer::handleWebSocketDisconnect(std::string uuid, std::string reason) {
     if (!uuid.empty()) {
@@ -254,11 +303,13 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         if (!jsonData.contains("documents")) {
             std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
+            conn->send_text(json{{"status", "error"}, {"message", "Firebase não contém documentos"}}.dump());
             return crow::response(400, "error: não foi possível encontrar documento");
         }
 
         if (!jsonContainsUUID(jsonData, uuid)) {
             std::cout << "UUID não encontrado no JSON!" << std::endl;
+            conn->send_text(json{{"status", "absent"}, {"message", "UUID não encontrado no JSON"}}.dump());
             conn->close(); // fecha conexão, pois não está autenticada
             return crow::response(400, "error: não foi possível encontrar uuid");
         }

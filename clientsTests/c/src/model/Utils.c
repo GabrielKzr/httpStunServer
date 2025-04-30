@@ -130,3 +130,15 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
 
     return 1;
 }
+
+int remove_uuid_file() {
+    const char *filename = "uuid.txt";
+
+    if (remove(filename) == 0) {
+        printf("Arquivo %s removido com sucesso.\n", filename);
+        return 1;
+    } else {
+        perror("Erro ao remover o arquivo");
+        return 0;
+    }
+}

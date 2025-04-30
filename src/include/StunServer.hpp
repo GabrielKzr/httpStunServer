@@ -91,6 +91,8 @@ class StunServer {
         crow::response sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
         crow::response removeClient(StunHeader& stunRequest, std::string* authId);
 
+        void firebaseDataInit();
+
     public:
 
         bool isClosed = false;
