@@ -203,8 +203,9 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
         }
 
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
+            printf("Conexão com o servidor não disponível\n");
             interrupted = 1;
-            exit(0);
+            break;
 
         case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE:
         case LWS_CALLBACK_CLOSED:
@@ -217,10 +218,10 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
         case LWS_CALLBACK_CLIENT_CLOSED:
             printf("[client] close detectado, interrompendo loop\n");
             interrupted = 1;
-            exit(0);
+            break;
 
         default:
-            printf("[client] Callback não tratado: %d\n", reason);
+            // printf("[client] Callback não tratado: %d\n", reason);
             break;
     }
 
@@ -296,16 +297,13 @@ int websocket_connect(const char* uuid, char* idToken) {
     }
 
     data->sent = 0;
-
     while (!interrupted) {
         lws_service(context, 100);
     }
 
-    printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
-
     lws_context_destroy(context);
 
-    printf("BBBBBBBBBBBBBBBBBBBBBBBBBBB\n");
+    sleep(5);
 
     return 1;
 }

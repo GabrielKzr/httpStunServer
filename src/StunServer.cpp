@@ -260,7 +260,7 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
         }    
         */
 
-        return this->exchangeIpRequest(stunRequest, *clientIp);
+        return this->exchangeIpRequest(stunRequest, *clientIp, *authId);
 
     // provavelmente depois vão ter mais tipos de request
 
@@ -444,15 +444,47 @@ crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket
     return crow::response(statusCode, j.dump());
 }
 
-crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp) {
+bool StunServer::clientHasUuid(const std::string& uuid, const std::string& idToken) {
+    // Envia uma requisição ao Firebase para obter os dados do usuário específico identificado por idToken
+    std::string response = firebaseManager->sendRequest("users", idToken, "", GET);
+    
+    // Tenta parsear a resposta como JSON
+    nlohmann::json jsonData;
+    try {
+        jsonData = nlohmann::json::parse(response);
+    } catch (const nlohmann::json::parse_error& e) {
+        std::cerr << "Erro ao parsear resposta do Firebase: " << e.what() << std::endl;
+        return false;
+    }
+
+    // Verifica se a resposta contém os dados do usuário
+    if (!jsonData.is_object() || !jsonData.contains("fields") || !jsonData["fields"].contains("routers")) {
+        std::cerr << "Resposta do Firebase não contém os dados esperados para o usuário: " << idToken << std::endl;
+        return false;
+    }
+
+    // Acessa os routers do usuário
+    nlohmann::json userData = jsonData["fields"];
+    auto& routers = userData["routers"]["mapValue"]["fields"];
+
+    // Verifica se o uuid está presente nos routers
+    return routers.contains(uuid);
+}
+
+crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp, const std::string& authId) {
 
     std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
 
-    /* // verifica se o cliente tem o uuid do roteador requisitado vinculado ao seu próprio id
-    if(!firebaseManager.clientHasUuid()) {
-        return crow::resoponse(400, "client ID has not UUID binded")
+    std::string localId;
+
+    if(!firebaseManager->verifyGoogleIdToken(authId, &localId)) {
+        return crow::response(400, "Auth ID invalid");
     }    
-    */
+
+    // verifica se o cliente tem o uuid do roteador requisitado vinculado ao seu próprio id
+    if(!this->clientHasUuid(uuid, localId)) {
+        return crow::response(400, "client ID has not UUID binded");
+    }    
 
     connInfo *conn;
 

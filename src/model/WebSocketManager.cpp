@@ -70,7 +70,7 @@ int WebSocketManager::getConnPort(crow::websocket::connection* conn, const std::
                 return -1;
             }
 
-            // se ainda não tem porta definida, porque a conexão é nonva então cria uma porta nova pra aquele ip
+            // se ainda não tem porta definida, porque a conexão é nova então cria uma porta nova pra aquele ip
 
             auto _ip = std::string(ip);
 
