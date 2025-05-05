@@ -282,6 +282,10 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         return this->removeClient(stunRequest, authId);
 
+    case 0x0007:
+
+        return this->getRemoteIp(stunRequest, *clientIp);
+
     default:
 
         return crow::response(404, "stun request type does not exist");
@@ -447,7 +451,13 @@ crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket
 bool StunServer::clientHasUuid(const std::string& uuid, const std::string& idToken) {
     // Envia uma requisição ao Firebase para obter os dados do usuário específico identificado por idToken
     std::string response = firebaseManager->sendRequest("users", idToken, "", GET);
-    
+
+    std::cout << "\n==================================================================\n";
+
+    std::cout << response << std::endl;
+
+    std::cout << "\n==================================================================\n";
+
     // Tenta parsear a resposta como JSON
     nlohmann::json jsonData;
     try {
@@ -467,13 +477,21 @@ bool StunServer::clientHasUuid(const std::string& uuid, const std::string& idTok
     nlohmann::json userData = jsonData["fields"];
     auto& routers = userData["routers"]["mapValue"]["fields"];
 
+    std::cout << "\n==================================================================\n";
+
+    std::cout << uuid << std::endl;
+
+    std::cout << routers << std::endl;
+
+    std::cout << "\n==================================================================\n";
+
     // Verifica se o uuid está presente nos routers
     return routers.contains(uuid);
 }
 
 crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp, const std::string& authId) {
 
-    std::string uuid(reinterpret_cast<const char*>(stunRequest.uuid), 16);
+    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
 
     std::string localId;
 
@@ -524,6 +542,8 @@ crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::s
 
     j1.update(j2);
 
+    std::cout << "Resposta final JSON (primeiro): " << j1.dump(4) << std::endl;  // dump(4) para identação bonita
+
     try {
         xorAddr = buildXorMappedAddress(port, conn->conn->get_remote_ip());
     } catch(const std::exception& e) {
@@ -534,6 +554,8 @@ crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::s
     j2 = stunHeaderToJsonNlohmann(stunRequest);
 
     j1.update(j2);
+
+    std::cout << "Resposta final JSON: (primeiro): " << j1.dump(4) << std::endl;
 
     return crow::response(200, j1.dump());
 }
@@ -626,6 +648,26 @@ crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* au
 
 
 
+}
+
+crow::response StunServer::getRemoteIp(StunHeader& stunRequest, const std::string clientIp) {
+
+    XorMappedAddress xorAddr;
+
+    try {
+        xorAddr = buildXorMappedAddress(0, clientIp);
+    } catch(const std::exception& e) {
+        return crow::response(400, "IP inválido");
+    }
+
+    json j1 = xorMappedAddressToJsonNlohmann(xorAddr);
+    json j2 = stunHeaderToJsonNlohmann(stunRequest);
+
+    j1.update(j2);
+
+    std::cout << "Resposta final JSON (primeiro): " << j1.dump(4) << std::endl;  // dump(4) para identação bonita
+
+    return crow::response(200, j1.dump());
 }
 
 void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const std::string& data, bool is_binary) {

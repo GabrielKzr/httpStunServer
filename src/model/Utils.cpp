@@ -186,12 +186,12 @@ json xorMappedAddressToJsonNlohmann(const XorMappedAddress& xorAddr) {
     j["family"] = xorAddr.family;
 
     // Decodifica a porta XOR usando o MAGIC_COOKIE (assumindo 0x2112A442 como no exemplo)
-    uint16_t port = ntohs(xorAddr.xor_port) ^ (MAGIC_COOKIE >> 16);
+    uint16_t port = ntohs(xorAddr.xor_port); // ^ (MAGIC_COOKIE >> 16);
     j["xor_port"] = port;
 
     // Decodifica o IP XOR (apenas IPv4 por enquanto, family = 0x01)
     if (xorAddr.family == 0x01) {
-        uint32_t ip = ntohl(xorAddr.xor_ip) ^ MAGIC_COOKIE;
+        uint32_t ip = ntohl(xorAddr.xor_ip); // ^ MAGIC_COOKIE;
         struct in_addr addr;
         addr.s_addr = htonl(ip); // Converte de volta para network byte order para inet_ntop
         char ip_str[INET_ADDRSTRLEN];

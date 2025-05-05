@@ -76,7 +76,7 @@ int WebSocketManager::getConnPort(crow::websocket::connection* conn, const std::
 
             info.portIpMap.push_back(_ip);
             
-            return info.portIpMap.size() + BASE_CONN_PORT;
+            return info.portIpMap.size() - 1 + BASE_CONN_PORT;
         }
     }
     return -1; // Retorna -1 caso a conexão não seja encontrada

@@ -92,6 +92,9 @@ class StunServer {
         crow::response sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
         crow::response removeClient(StunHeader& stunRequest, std::string* authId);
 
+        // ação de stunServer
+        crow::response getRemoteIp(StunHeader& stunRequest, const std::string clientIp);
+
         void firebaseDataInit();
 
     public:
