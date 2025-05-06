@@ -1,6 +1,7 @@
 #include "src/include/WebSocketManager.h"
 #include "src/include/StunHeaders.h"
 #include "src/include/Utils.h"
+#include "src/include/Chownat.h"
 
 volatile int interrupted = 0;
 
@@ -166,6 +167,60 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                     printf("Processo de setup completo\n");
 
+                } else if (strcmp(status->valuestring, "exchange") == 0) {
+                    char remoteaddr[16] = {0};
+                    int remoteport = 0;
+
+                    cJSON *xor_port_item = cJSON_GetObjectItemCaseSensitive(json, "xor_port");
+                    cJSON *xor_ip_item = cJSON_GetObjectItemCaseSensitive(json, "xor_ip");
+
+                    if (!cJSON_IsNumber(xor_port_item) || !cJSON_IsString(xor_ip_item)) {
+                        printf("Erro: xor_port ou xor_ip inválidos\n");
+                        break;
+                    }
+
+                    // Des-XOR da porta
+                    int xor_port = xor_port_item->valueint;
+                    remoteport = xor_port ^ (MAGIC_COOKIE >> 16);
+
+                    // Des-XOR do IP
+                    uint8_t ip_parts[4];
+                    if (sscanf(xor_ip_item->valuestring, "%hhu.%hhu.%hhu.%hhu", 
+                            &ip_parts[0], &ip_parts[1], &ip_parts[2], &ip_parts[3]) != 4) {
+                        printf("Erro: IP inválido\n");
+                        break;
+                    }
+
+                    uint32_t xor_ip = (ip_parts[0] << 24) |
+                                    (ip_parts[1] << 16) |
+                                    (ip_parts[2] << 8)  |
+                                    ip_parts[3];
+
+                    uint32_t original_ip = xor_ip ^ MAGIC_COOKIE;
+
+                    snprintf(remoteaddr, sizeof(remoteaddr), "%u.%u.%u.%u",
+                        (original_ip >> 24) & 0xFF,
+                        (original_ip >> 16) & 0xFF,
+                        (original_ip >> 8)  & 0xFF,
+                        original_ip & 0xFF
+                    );
+
+                    // DEBUG
+                    printf("IP original: %s\n", remoteaddr);
+                    printf("Porta original: %d\n", remoteport);
+
+                    struct Session_Data *data = malloc(sizeof(struct Session_Data));
+                    
+                    strncpy(data->remoteaddr, remoteaddr, sizeof(data->remoteaddr) - 1);
+                    data->remoteaddr[sizeof(data->remoteaddr) - 1] = '\0'; // Garantir terminação nula
+                    data->remoteport = remoteport;
+
+                    pthread_t thread;
+
+                    pthread_create(&thread, NULL, holepunch, data);
+
+                    pthread_detach(thread);
+
                 } else if (strcmp(status->valuestring, "disconnected") == 0) {
                     
                     printf("Roteador desconectado\n");
@@ -229,6 +284,8 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
+
+    chownat_init();
 
     interrupted = 0;
 

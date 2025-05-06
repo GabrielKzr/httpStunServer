@@ -542,7 +542,13 @@ crow::response StunServer::exchangeIpPort(connInfo *conn, int port, const std::s
 
     j1.update(j2);
 
+    j1.update(nlohmann::json{   
+        {"status", "exchange"}
+    });
+
     std::cout << "Resposta final JSON (primeiro): " << j1.dump(4) << std::endl;  // dump(4) para identação bonita
+
+    conn->conn->send_text(j1.dump());
 
     try {
         xorAddr = buildXorMappedAddress(port, conn->conn->get_remote_ip());

@@ -6,6 +6,8 @@
 
 #define BUFFER_SIZE 2048
 
+#define NUM_THREADS 5
+
 typedef struct {
     unsigned char uuid[33];
     char idToken[2048];
