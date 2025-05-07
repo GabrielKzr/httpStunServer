@@ -46,7 +46,11 @@ void chownat_disconnect(int chownat, struct sockaddr_in dst)
 
 int chownat_start(char* remoteaddr, int remoteport)
 {
-    printf("DEBUG: Opening socket on port %d\n", remoteport);
+    printf("DEBUG: Opening UDP socket on port %d\n", remoteport);
+    printf("DEBUG: Opening TCP socket on port %d\n", localport);
+    printf("DEBUG: Opening UDP socket on addr %s\n", remoteaddr);
+    printf("DEBUG: Opening TCP socket on addr %s\n", localhost);
+    
     // struct protoent *proto = getprotobyname("udp");
     // if (proto == NULL) {
     //     printf("ERROR: protocol udp not found.\n");
@@ -56,6 +60,12 @@ int chownat_start(char* remoteaddr, int remoteport)
     int chownat = socket(AF_INET, SOCK_DGRAM, 0);
     if (chownat < 0) {
         printf("ERROR: socket %s\n", strerror(errno));
+        exit(errno);
+    }
+
+    int optval = 1;
+    if (setsockopt(chownat, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+        perror("ERROR: setsockopt(SO_REUSEADDR) failed");
         exit(errno);
     }
 
@@ -277,13 +287,15 @@ void *holepunch(void* args) {
     char *remoteaddr = data->remoteaddr;
     int remoteport = data->remoteport;
 
-    free(args);
+    printf("DEBUG: Holepunch thread started with remoteaddr: %s, remoteport: %d\n", remoteaddr, remoteport);
 
     printf("DEBUG: Starting holepunch thread\n");
 
     sem_wait(&bin_sem);
 
     chownat_start(remoteaddr, remoteport);
+
+    free(args);
 
     sem_post(&bin_sem);
 
