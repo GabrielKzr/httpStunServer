@@ -636,24 +636,17 @@ crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* au
 
                 webSocketManager.remove(uuid);
 
-                return crow::response(200, "success: roteador removido com sucesso");
+                return crow::response(200, stunHeaderToJson(stunRequest));
 
             } else {
 
-                return crow::response(400, "error: roteador não disponível no servidor");
+                return crow::response(400, stunHeaderToJson(stunRequest));
 
             }
         }
     }
 
-    return crow::response(400, "error: usuário não disponível no sistema");
-
-
-    //    nlohmann::json userData = user["fields"];
-    //    auto routers = userData["routers"]["mapValue"]["fields"];
-
-
-
+    return crow::response(400, stunHeaderToJson(stunRequest));
 }
 
 crow::response StunServer::getRemoteIp(StunHeader& stunRequest, const std::string clientIp) {

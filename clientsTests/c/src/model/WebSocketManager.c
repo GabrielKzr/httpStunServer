@@ -321,7 +321,7 @@ int websocket_connect(const char* uuid, char* idToken) {
     }
 
     connect_info.context = context;
-    connect_info.address = "10.0.0.20";
+    connect_info.address = "localhost";
     connect_info.port = 18080;
     connect_info.path = "/ws";
     connect_info.host = connect_info.address;
