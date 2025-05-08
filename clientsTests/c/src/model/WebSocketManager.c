@@ -211,8 +211,14 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                     struct Session_Data *data = malloc(sizeof(struct Session_Data));
                     
-                    strncpy(data->remoteaddr, remoteaddr, sizeof(data->remoteaddr) - 1);
-                    data->remoteaddr[sizeof(data->remoteaddr) - 1] = '\0'; // Garantir terminação nula
+                    data->remoteaddr = malloc(strlen(remoteaddr) + 1);
+                    if (data->remoteaddr == NULL) {
+                        printf("Erro ao alocar memória para remoteaddr\n");
+                        free(data);
+                        break;
+                    }
+                    strcpy(data->remoteaddr, remoteaddr);
+                    data->remoteaddr[strlen(remoteaddr)] = '\0'; // Garante terminação
                     data->remoteport = remoteport;
 
                     pthread_t thread;
@@ -315,7 +321,7 @@ int websocket_connect(const char* uuid, char* idToken) {
     }
 
     connect_info.context = context;
-    connect_info.address = "localhost";
+    connect_info.address = "10.0.0.20";
     connect_info.port = 18080;
     connect_info.path = "/ws";
     connect_info.host = connect_info.address;

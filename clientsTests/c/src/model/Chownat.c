@@ -294,7 +294,9 @@ void *holepunch(void* args) {
     sem_wait(&bin_sem);
 
     chownat_start(remoteaddr, remoteport);
-
+    
+    free (remoteaddr);
+    
     free(args);
 
     sem_post(&bin_sem);

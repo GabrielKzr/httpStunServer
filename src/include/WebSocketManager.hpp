@@ -20,7 +20,7 @@ private:
     std::mutex mutex_; // Para evitar race conditions ao acessar a lista
     std::unordered_map<std::string, connInfo> connections_;
 
-    const int BASE_CONN_PORT = 44444;
+    const int BASE_CONN_PORT = 2222;
     const int MAX_IP_PER_CONNECTION = 100;
 
 public:

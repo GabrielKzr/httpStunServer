@@ -21,7 +21,7 @@
 
 #define debug 0
 #define localport 80
-#define localhost "127.0.0.1"
+#define localhost "192.168.80.1"
 #define size 1024
 
 #define max(a,b)             \
@@ -32,7 +32,7 @@
 })
 
 struct Session_Data {
-    char remoteaddr[16];
+    char *remoteaddr;
     int remoteport;
 };
 
