@@ -4,3 +4,4 @@ pubspec.lock
 /src/files/
 .vscode
 .dart_tool
+/clientsTests/c/uuid.txt

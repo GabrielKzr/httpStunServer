@@ -19,6 +19,8 @@ typedef struct {
     // StunHeader stunHeader;
 } ClientData;
 
+
+// THE PROTOCOL INFORMATIOS DOWN BELOW ARE NOT THE SAME AS THE PROTOCOL IMPLEMENTED IN THE SERVER (Need to update)
 /*
     * OBS: the message types choosed in this protocol doesn't follow the 
            STUN protocol pattern, the types (values) were just chosen for convenience

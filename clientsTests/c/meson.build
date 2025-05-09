@@ -10,7 +10,8 @@ src = [
   'src/main.c',
   'src/model/Utils.c',
   'src/model/WebSocketManager.c',
-  'src/model/Chownat.c'
+  'src/model/Chownat.c',
+  'src/model/list.c'
 ]
 
 libwebsockets = dependency('libwebsockets', required: true)

@@ -254,12 +254,6 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         std::cout << "Ip exchange request\n";
 
-        /* // precisa ativar quando vincular com o dart
-        if(!firebaseManager->verifyGoogleIdToken(*authId)) {
-            break;
-        }    
-        */
-
         return this->exchangeIpRequest(stunRequest, *clientIp, *authId);
 
     // provavelmente depois vão ter mais tipos de request
@@ -270,11 +264,11 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
         return this->uuidResponse(stunRequest, authId);
 
-    case 0x0004:
+    case 0x0004: // recebido do router 
 
         return this->clientBind(stunRequest, conn, authId);
 
-    case 0x0005:
+    case 0x0005: // recebido do router
 
         return this->clientBind(stunRequest, conn);
 
@@ -352,11 +346,23 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         webSocketManager.add(uuid, conn, stunRequest);
 
-        conn->send_text(json{{"status", "connected"}, {"message", "Conexão feita com sucesso"}}.dump());
+        json responseJson = stunHeaderToJsonNlohmann(stunRequest);
+
+        responseJson.update(nlohmann::json{   
+            {"status", "connected"}
+        });
+      
+        conn->send_text(responseJson.dump());
 
         return crow::response(200, "success: status de roteador atualizado com sucesso");
 
     } catch (const std::exception& e) {
+
+        json responseJson = stunHeaderToJsonNlohmann(stunRequest);
+        responseJson.update(nlohmann::json{   
+            {"status", "error"}
+        });
+
         std::cerr << "Erro ao processar fechamento de conexão: " << e.what() << std::endl;
         return crow::response(400, "error: Erro ao comunicar com o Firebase");
     }
@@ -378,7 +384,9 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
     }
 
     if(!addRouterToUser(localId, uuid, true)) {
-        j = {{"status", "error"}, {"message", "Erro ao adicionar roteador ao Firebase"}};
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "error"}});
+
         conn->send_text(j.dump());
         statusCode = 400;
         crow::response(statusCode, j.dump());
@@ -388,15 +396,17 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         std::cout << "UUID registrado: " << uuid << std::endl;
 
-        j = {{"status", "connected"}, {"message", bytes_to_hex(stunRequest.uuid, 16)}};
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "connected"}});
         statusCode = 200;
 
         conn->send_text(j.dump());
     } else {
 
         std::cout << "UUID já registrado: " << uuid << std::endl;
-
-        j = {{"status", "error"}, {"message", "UUID já está em uso"}};
+        
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "error"}});
         statusCode = 400;
 
         conn->send_text(j.dump());
@@ -408,17 +418,24 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 // função que manda para roteador salvar uuid (não salva nada no servidor ainda)
 crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
 
+    json j;
+
     if(authId == nullptr) {
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "error"}});
+        conn->send_text(j.dump());
         return crow::response(400, "Missing auth ID");
     }
 
     if(!firebaseManager->verifyGoogleIdToken(*authId)) {
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "error"}});
+        conn->send_text(j.dump());
         return crow::response(400, "Auth ID invalid");
     }
 
     std::cout << "Entro no sendToRouter\n";
 
-    json j;
     int statusCode = 0;
 
     std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
@@ -427,23 +444,21 @@ crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket
 
         std::cout << "UUID registrado: " << uuid << std::endl;
 
-        j = {{"status", "success"}, {"message", uuid}, {"auth_id", *authId}};
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "success"}, {"auth_id", *authId}});
         statusCode = 200;
-
-        std::cout << "SEG FAULT AQ?\n";
 
         conn->send_text(j.dump());
 
     } else {
         std::cout << "UUID já registrado: " << uuid << std::endl;
 
-        j = {{"status", "error"}, {"message", "UUID já está em uso"}};
+        j = stunHeaderToJsonNlohmann(stunRequest);
+        j.update({{"status", "error"}});
         statusCode = 400;
 
         conn->send_text(j.dump());
     }
-
-    std::cout << "segfaultpassou\n";
 
     return crow::response(statusCode, j.dump());
 }
@@ -631,7 +646,10 @@ crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* au
 
                 auto conn = webSocketManager.get_connection(uuid);
 
-                conn->conn->send_text(json{{"status", "disconnected"}, {"message", "UUID desconectado"}}.dump());
+                json j = stunHeaderToJsonNlohmann(conn->header);
+                j.update({{"status", "disconnected"}});
+
+                conn->conn->send_text(j.dump());
                 conn->conn->close();
 
                 webSocketManager.remove(uuid);

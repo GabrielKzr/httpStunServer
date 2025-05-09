@@ -3,6 +3,7 @@
 
 #include <cjson/cJSON.h>
 #include <libwebsockets.h>
+#include "list.h"
 
 #define BUFFER_SIZE 2048
 
@@ -17,5 +18,7 @@ typedef struct {
 int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
 
 int websocket_connect(const char* uuid, char* idToken);
+
+bool find_by_transaction_id(void* data, void* cmpval);
 
 #endif

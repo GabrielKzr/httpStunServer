@@ -3,6 +3,8 @@
 #include "src/include/Utils.h"
 #include "src/include/Chownat.h"
 
+list_t *list;
+
 volatile int interrupted = 0;
 
 static struct lws_protocols protocols[] = {
@@ -19,6 +21,10 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
     switch (reason) {
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
             printf("[client] Conectado!\n");
+
+            list = (list_t *)malloc(sizeof(list_t));
+            list_init(list);
+
             lws_callback_on_writable(wsi);
             break;
 
@@ -29,17 +35,16 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
             size_t len;
             cJSON *json;
-            StunHeader header;
+            StunHeader* header = malloc(sizeof(StunHeader));
             char *json_str;
-
 
             if (data->idToken[0] == '\0') { // caso não envie idToken, considera que já tem um uuid válido e reconhecido pelo servidor
 
                 printf("uuid: %s\n", data->uuid);
                 
-                header = create_stun_request(data->uuid, 0x0005);
+                *header = create_stun_request(data->uuid, 0x0005);
                
-                json = stun_header_to_json(&header);
+                json = stun_header_to_json(header);
                 if (!json) {
                     fprintf(stderr, "Falha ao criar JSON\n");
                     break;
@@ -57,16 +62,15 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
                 printf("uuid: %s\n", data->uuid);
                 printf("idToken: %s\n", data->idToken);
 
-                StunHeader header = create_stun_request(data->uuid, 0x0001);
+                *header = create_stun_request(data->uuid, 0x0001);
                 
-                json = stun_header_to_json(&header);
+                json = stun_header_to_json(header);
                 if (!json) {
                     fprintf(stderr, "Falha ao criar JSON\n");
                     break;
                 }
                 cJSON_AddStringToObject(json, "auth_id", data->idToken);
             }
-
 
             // Serializa pra string
             json_str = cJSON_PrintUnformatted(json);
@@ -93,6 +97,11 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
             // Envia os dados
             lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
+
+            list_entry_t *entry = malloc(sizeof(list_entry_t));
+            entry->data = header;
+
+            list_push_back(list, entry);
 
             cJSON_Delete(json);
             free(json_str);
@@ -123,12 +132,23 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
             if (cJSON_IsString(status) && status->valuestring != NULL) {
                 if (strcmp(status->valuestring, "success") == 0) {
 
-                    cJSON *uuid = cJSON_GetObjectItemCaseSensitive(json, "message");
+                    cJSON *uuid = cJSON_GetObjectItemCaseSensitive(json, "uuid");
                     cJSON *authId = cJSON_GetObjectItemCaseSensitive(json, "auth_id");
+                    cJSON *tid = cJSON_GetObjectItemCaseSensitive(json, "transaction_id");
 
-                    if(uuid == NULL || authId == NULL) {
+                    if(uuid == NULL || authId == NULL || tid == NULL) {
                         printf("Erro, json recebido inválido");
                         exit(0);
+                    }
+
+                    list_entry_t *entry;
+                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista");
+                        break;
+                    } else {
+                        printf("Transaction_id encontrado na lista\n");
+                        free(entry->data); // limpando os dados alocados dinâmicamente, porque o remove não faz isso
+                        list_remove(list, entry);
                     }
 
                     if(!save_uuid_file((uint8_t*)uuid->valuestring)) {                        
@@ -136,9 +156,10 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
                         exit(0);
                     } else {
 
-                        StunHeader header = create_stun_request((uint8_t *)uuid->valuestring, 0x0004);
+                        StunHeader* header = malloc(sizeof(StunHeader));
+                        *header = create_stun_request((uint8_t *)uuid->valuestring, 0x0004);
 
-                        cJSON *json_send = stun_header_to_json(&header);
+                        cJSON *json_send = stun_header_to_json(header);
                         if (!json_send) {
                             fprintf(stderr, "Falha ao criar JSON\n");
                             exit(0);
@@ -159,11 +180,29 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                         lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
 
+                        list_entry_t *newEntry = malloc(sizeof(list_entry_t));
+                        newEntry->data = header;
+
+                        list_push_back(list, newEntry);
+
                         free(json_str);
                         cJSON_Delete(json_send);
                     }
 
                 } else if (strcmp(status->valuestring, "connected") == 0) {
+
+                    cJSON *tid = cJSON_GetObjectItemCaseSensitive(json, "transaction_id");
+                    
+                    if(tid == NULL) {
+                        printf("Erro, json recebido inválido");
+                        exit(0);
+                    }
+
+                    list_entry_t *entry;
+                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista");
+                        break;
+                    } // não remove nesse caso, porque as repostas de troca de ip virão com esse transaction_id
 
                     printf("Processo de setup completo\n");
 
@@ -173,6 +212,18 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                     cJSON *xor_port_item = cJSON_GetObjectItemCaseSensitive(json, "xor_port");
                     cJSON *xor_ip_item = cJSON_GetObjectItemCaseSensitive(json, "xor_ip");
+                    cJSON *tid = cJSON_GetObjectItemCaseSensitive(json, "transaction_id");
+
+                    if(tid == NULL) {
+                        printf("Erro, json recebido inválido");
+                        exit(0);
+                    }
+
+                    list_entry_t *entry;
+                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista");
+                        break;
+                    } 
 
                     if (!cJSON_IsNumber(xor_port_item) || !cJSON_IsString(xor_ip_item)) {
                         printf("Erro: xor_port ou xor_ip inválidos\n");
@@ -231,6 +282,23 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
                     
                     printf("Roteador desconectado\n");
 
+                    cJSON *tid = cJSON_GetObjectItemCaseSensitive(json, "transaction_id");
+
+                    if(tid == NULL) {
+                        printf("Erro, json recebido inválido");
+                        exit(0);
+                    }
+
+                    list_entry_t *entry;
+                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista");
+                        break;
+                    } else {
+                        printf("Transaction_id encontrado na lista\n");
+                        free(entry->data); // limpando os dados alocados dinâmicamente, porque o remove não faz isso
+                        list_remove(list, entry);
+                    }   
+
                     remove_uuid_file();
                     lws_close_reason(wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
                     interrupted = 1; // <- adicione isso
@@ -240,12 +308,47 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                     printf("UUID não encontrado no Firebase!\n");
                 
+                    cJSON *tid = cJSON_GetObjectItemCaseSensitive(json, "transaction_id");
+
+                    if(tid == NULL) {
+                        printf("Erro, json recebido inválido");
+                        exit(0);
+                    }
+
+                    list_entry_t *entry;
+                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista");
+                        break;
+                    } else {
+                        printf("Transaction_id encontrado na lista\n");
+                        free(entry->data); // limpando os dados alocados dinâmicamente, porque o remove não faz isso
+                        list_remove(list, entry);
+                    }   
+
                     remove_uuid_file();
                     lws_close_reason(wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
                     interrupted = 1; // <- adicione isso
                     break;
 
                 }  else if (strcmp(status->valuestring, "error") == 0) {
+
+                    cJSON *tid = cJSON_GetObjectItemCaseSensitive(json, "transaction_id");
+
+                    if(tid == NULL) {
+                        printf("Erro, json recebido inválido");
+                        exit(0);
+                    }
+
+                    list_entry_t *entry;
+                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista");
+                        break;
+                    } else {
+                        printf("Transaction_id encontrado na lista\n");
+                        free(entry->data); // limpando os dados alocados dinâmicamente, porque o remove não faz isso
+                        list_remove(list, entry);
+                    }   
+
                     interrupted = 1; // <- adicione isso
                     printf("Erro ao registrar UUID!\n");
                     break; 
@@ -287,6 +390,16 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
     }
 
     return 0;
+}
+
+bool find_by_transaction_id(void* data, void* cmpval) {
+    if (data == NULL || cmpval == NULL)
+        return false;
+
+    StunHeader* header = (StunHeader*)data;
+    uint8_t* target_id = (uint8_t*)cmpval;
+
+    return memcmp(header->transaction_id, target_id, 24) == 0;
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
@@ -365,6 +478,11 @@ int websocket_connect(const char* uuid, char* idToken) {
     }
 
     lws_context_destroy(context);
+
+    if(list != NULL) {
+        list_clear(list);
+        free(list);
+    }
 
     sleep(5);
 
