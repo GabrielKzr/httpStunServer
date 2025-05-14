@@ -21,4 +21,6 @@ int websocket_connect(const char* uuid, char* idToken);
 
 bool find_by_transaction_id(void* data, void* cmpval);
 
+void print_stunHeader_tid(void* header);
+
 #endif

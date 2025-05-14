@@ -15,6 +15,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 /* Forward declaration */
 typedef struct _list_entry list_entry_t;
@@ -37,6 +38,8 @@ typedef struct _list {
     list_entry_t *tail;
     size_t size;
 } list_t;
+
+typedef void (*print_fn_t)(void *data);
 
 /**
  * @brief Initializes a list
@@ -159,3 +162,5 @@ void list_clear(list_t *list);
  * @param list Pointer to the list
  */
 void list_destroy(list_t *list);
+
+void list_print(list_t *list, print_fn_t printer);

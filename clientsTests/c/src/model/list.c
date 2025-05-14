@@ -215,3 +215,14 @@ void list_destroy(list_t *list)
 		free(oldentry);
 	}
 }
+
+void list_print(list_t *list, print_fn_t printer) {
+    if (!list || !printer) return;
+
+    list_entry_t *entry = list->head;
+    while (entry) {
+        printer(entry->data);     
+        entry = entry->next;
+    }
+    printf("\n");
+}

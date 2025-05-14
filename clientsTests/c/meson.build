@@ -7,7 +7,7 @@ project(
 incdir = include_directories('src/include')
 
 src = [
-  'src/main.c',
+  'src/main.c',a
   'src/model/Utils.c',
   'src/model/WebSocketManager.c',
   'src/model/Chownat.c',

@@ -17,6 +17,15 @@ static struct lws_protocols protocols[] = {
     { NULL, NULL, 0, 0 } // fim da lista
 };
 
+void print_stunHeader_tid(void* data) {
+
+    char c[24];
+
+    bytes_to_hex(((StunHeader*)data)->transaction_id, 12, c);
+
+    printf("%s -> ", c);
+}
+
 int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len) {
     switch (reason) {
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
@@ -98,10 +107,7 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
             // Envia os dados
             lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
 
-            list_entry_t *entry = malloc(sizeof(list_entry_t));
-            entry->data = header;
-
-            list_push_back(list, entry);
+            list_push_back(list, header);
 
             cJSON_Delete(json);
             free(json_str);
@@ -180,10 +186,11 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
                         lws_write(wsi, &buf[LWS_PRE], len, LWS_WRITE_TEXT);
 
-                        list_entry_t *newEntry = malloc(sizeof(list_entry_t));
-                        newEntry->data = header;
+                        list_push_back(list, header);
 
-                        list_push_back(list, newEntry);
+                        printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+                        list_print(list, print_stunHeader_tid);
+                        printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 
                         free(json_str);
                         cJSON_Delete(json_send);
@@ -198,9 +205,10 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
                         exit(0);
                     }
 
-                    list_entry_t *entry;
-                    if((entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id)) == NULL) {
-                        printf("Erro, transaction_id não encontrado na lista");
+                    list_entry_t *entry = list_find(list, (void*)tid->valuestring, find_by_transaction_id);
+
+                    if(entry == NULL) {
+                        printf("Erro, transaction_id não encontrado na lista\n");
                         break;
                     } // não remove nesse caso, porque as repostas de troca de ip virão com esse transaction_id
 
@@ -399,7 +407,11 @@ bool find_by_transaction_id(void* data, void* cmpval) {
     StunHeader* header = (StunHeader*)data;
     uint8_t* target_id = (uint8_t*)cmpval;
 
-    return memcmp(header->transaction_id, target_id, 24) == 0;
+    char c[24];
+
+    bytes_to_hex(header->transaction_id, 12, c);
+
+    return memcmp(c, target_id, 24) == 0;
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
