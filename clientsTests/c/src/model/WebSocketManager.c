@@ -9,13 +9,17 @@ volatile int interrupted = 0;
 
 static struct lws_protocols protocols[] = {
     {
-        "my-protocol",
+        "",
         callback_websockets,
         sizeof(session_data_t),  // sem per_session_data
         4096,
     },
     { NULL, NULL, 0, 0 } // fim da lista
 };
+
+void sigint_handler(int sig) {
+    interrupted = 1;
+}
 
 void print_stunHeader_tid(void* data) {
 
@@ -415,6 +419,105 @@ bool find_by_transaction_id(void* data, void* cmpval) {
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
+    struct lws_context_creation_info info;
+    struct lws_client_connect_info connect_info;
+    struct lws_context *context;
+    int ret = 0;
+
+    // Validação de entrada
+    if (!uuid) {
+        lwsl_err("UUID é NULL\n");
+        return 0;
+    }
+
+    size_t uuid_len = strlen(uuid);
+    if (uuid_len != 32) {
+        lwsl_err("UUID inválido: %s (comprimento: %zu, esperado: 32)\n", uuid, uuid_len);
+        return 0;
+    }
+
+    // Configura o manipulador de sinal
+    signal(SIGINT, sigint_handler);
+
+    // Configuração do contexto
+    memset(&info, 0, sizeof(info));
+    info.port = CONTEXT_PORT_NO_LISTEN;
+    info.protocols = protocols;
+    info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+    
+    // Habilita logs detalhados (opcional)
+    lws_set_log_level(LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE, NULL);
+
+    // Cria o contexto
+    context = lws_create_context(&info);
+    if (!context) {
+        lwsl_err("Erro ao criar contexto\n");
+        return 0;
+    }
+
+    // Configuração da conexão
+    memset(&connect_info, 0, sizeof(connect_info));
+    connect_info.context = context;
+    connect_info.address = "localhost";
+    connect_info.host = connect_info.address;
+    connect_info.origin = connect_info.address;
+    connect_info.port = 18080;
+    connect_info.path = "/ws";
+    connect_info.protocol = protocols[0].name;
+    connect_info.pwsi = NULL;
+    
+    // Configurações SSL
+    connect_info.ssl_connection = LCCSCF_USE_SSL |
+                                 LCCSCF_ALLOW_SELFSIGNED |
+                                 LCCSCF_SKIP_SERVER_CERT_HOSTNAME_CHECK;
+    
+    // Estabelece a conexão
+    struct lws *wsi = lws_client_connect_via_info(&connect_info);
+    if (!wsi) {
+        lwsl_err("Erro ao conectar ao servidor WebSocket\n");
+        lws_context_destroy(context);
+        return 0;
+    }
+
+    // Configura os dados da sessão
+    session_data_t *data = (session_data_t *)lws_wsi_user(wsi);
+    if (!data) {
+        lwsl_err("session_data_t não inicializado\n");
+        lws_context_destroy(context);
+        return 0;
+    }
+
+    // Copia o UUID e idToken
+    strncpy(data->uuid, uuid, 32);
+    data->uuid[32] = '\0';
+    
+    if (idToken) {
+        strncpy(data->idToken, idToken, sizeof(data->idToken) - 1);
+        data->idToken[sizeof(data->idToken) - 1] = '\0';
+    } else {
+        data->idToken[0] = '\0';
+    }
+
+    data->sent = 0;
+
+    // Loop de serviço
+    while (!interrupted) {
+        lws_service(context, 0);
+    }
+
+    // Limpeza
+    lws_context_destroy(context);
+    if(list != NULL) {
+        list_clear(list);
+        free(list);
+    }
+
+    sleep(5);
+
+    return 1;
+}
+/*
+int websocket_connect(const char* uuid, char* idToken) {
 
     chownat_init();
 
@@ -445,14 +548,20 @@ int websocket_connect(const char* uuid, char* idToken) {
         return 0;
     }
 
-    connect_info.context = context;
-    connect_info.address = "localhost";
-    connect_info.port = 18080;
-    connect_info.path = "/ws";
+    connect_info.address = "localhost";   // IP real do servidor (mesmo da bindaddr)
     connect_info.host = connect_info.address;
     connect_info.origin = connect_info.address;
+    connect_info.port = 18080;
+    connect_info.path = "/ws";
+    connect_info.context = context;
     connect_info.protocol = protocols[0].name;
-    connect_info.ssl_connection = 0; // sem wss
+
+    // O ponto chave:
+    connect_info.ssl_connection = LCCSCF_USE_SSL |
+                                LCCSCF_ALLOW_SELFSIGNED |
+                                LCCSCF_SKIP_SERVER_CERT_HOSTNAME_CHECK |
+                                LCCSCF_ALLOW_INSECURE;
+    context_info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
 
     struct lws *wsi = lws_client_connect_via_info(&connect_info);
     if (!wsi) {
@@ -500,3 +609,4 @@ int websocket_connect(const char* uuid, char* idToken) {
 
     return 1;
 }
+*/

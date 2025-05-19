@@ -1,6 +1,8 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
+// #define CROW_ENABLE_SSL
+
 #include "StunHeaders.hpp"
 #include "crow.h"
 #include <stdexcept>
