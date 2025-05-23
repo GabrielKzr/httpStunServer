@@ -79,6 +79,8 @@
         "future": "cpp",
         "ranges": "cpp",
         "typeindex": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "utils.h": "c",
+        "tcpconnection.h": "c"
     }
 }

@@ -34,7 +34,7 @@ StunServer::StunServer(int port, size_t maxClients) {
 
 // ----------------------------------------------------------------------------
 
-    firebaseManager = new FirebaseManager(PROJECT_ID, FIREBASE_API_KEY, "src/files/sigmarr-c99af-firebase-adminsdk-fbsvc-34bd8258ee.json");
+    firebaseManager = new FirebaseManager(PROJECT_ID, FIREBASE_API_KEY, "src/files/sigmarr-c99af-firebase-adminsdk-fbsvc-8f8bd7b716.json");
 }
 
 void StunServer::stunServerInit() {
@@ -400,6 +400,10 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         j.update({{"status", "connected"}});
         statusCode = 200;
 
+        std::cout << "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n" << std::endl;
+        std::cout << j.dump() << std::endl;
+        std::cout << "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n" << std::endl;
+
         conn->send_text(j.dump());
     } else {
 
@@ -644,15 +648,23 @@ crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* au
 
                 firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
 
+                std::cout << "AAAAAAAAAAAAAAAAAA\n";
+
                 auto conn = webSocketManager.get_connection(uuid);
 
-                json j = stunHeaderToJsonNlohmann(conn->header);
-                j.update({{"status", "disconnected"}});
+                if(conn != nullptr) {
 
-                conn->conn->send_text(j.dump());
-                conn->conn->close();
-
-                webSocketManager.remove(uuid);
+                    json j = stunHeaderToJsonNlohmann(conn->header);
+                    j.update({{"status", "disconnected"}});
+                    
+                    if(conn->conn != nullptr) {
+                        conn->conn->send_text(j.dump());
+                        conn->conn->close();
+                    }
+                    
+                    webSocketManager.remove(uuid);
+                    
+                }
 
                 return crow::response(200, stunHeaderToJson(stunRequest));
 

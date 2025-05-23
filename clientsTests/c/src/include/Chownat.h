@@ -31,7 +31,7 @@
     _a > _b ? _a : _b;       \
 })
 
-struct Session_Data {
+struct chownat_data {
     char *remoteaddr;
     int remoteport;
 };
