@@ -71,7 +71,21 @@ void StunServer::stunServerInit() {
             std::cerr << "Erro: " << error << std::endl;
         });
 
-    app.port(this->port).multithreaded().run();
+    // ——> aqui você cria o contexto SSL manualmente:
+    asio::ssl::context ctx{asio::ssl::context::tlsv12};
+    // não pede nem verifica certificado do cliente
+    ctx.set_verify_mode(asio::ssl::verify_none);
+    // usa seu cert.pem e key.pem
+    ctx.use_certificate_chain_file("src/files/cert.pem");
+    ctx.use_private_key_file("src/files/key.pem", 
+                             asio::ssl::context::file_format::pem);
+
+    // roda o app com esse contexto, em vez de usar ssl_file()
+    app
+      .port(this->port)
+      .ssl(std::move(ctx))
+      .multithreaded()
+      .run();    
 }
 
 void StunServer::firebaseDataInit() {

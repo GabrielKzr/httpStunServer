@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fstream>
+#include <asio/ssl/context.hpp>
 
 #include "WebSocketManager.hpp"
 #include "FirebaseManager.hpp"
