@@ -12,8 +12,22 @@
 typedef struct {
     unsigned char uuid[33];
     char idToken[2048];
-    int sent;  // Flag para evitar envio múltiplo
 } session_data_t;
+
+typedef enum {
+    STATUS_UNKNOWN,
+    STATUS_BIND_SUCCESS,
+    STATUS_CONNECTED,
+    STATUS_EXCHANGE,
+    STATUS_DISCONNECTED,
+    STATUS_ABSENT,
+    STATUS_ERROR
+} StatusType;
+
+StatusType get_status_type(const char *status);
+
+int callback_writeable(session_data_t* data, char* outBuffer);
+int callback_receive(cJSON* in, char* outbuf);
 
 int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
 

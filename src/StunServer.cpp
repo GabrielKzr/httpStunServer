@@ -71,7 +71,6 @@ void StunServer::stunServerInit() {
             std::cerr << "Erro: " << error << std::endl;
         });
 
-
     // ——> aqui você cria o contexto SSL manualmente:
     asio::ssl::context ctx{asio::ssl::context::tlsv12};
     // não pede nem verifica certificado do cliente
@@ -86,7 +85,7 @@ void StunServer::stunServerInit() {
       .port(this->port)
       .ssl(std::move(ctx))
       .multithreaded()
-      .run();
+      .run();    
 }
 
 void StunServer::firebaseDataInit() {
@@ -415,6 +414,10 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         j.update({{"status", "connected"}});
         statusCode = 200;
 
+        std::cout << "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n" << std::endl;
+        std::cout << j.dump() << std::endl;
+        std::cout << "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n" << std::endl;
+
         conn->send_text(j.dump());
     } else {
 
@@ -659,15 +662,23 @@ crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* au
 
                 firebaseManager->sendRequest("users", userId, patchData.dump(), PATCH);
 
+                std::cout << "AAAAAAAAAAAAAAAAAA\n";
+
                 auto conn = webSocketManager.get_connection(uuid);
 
-                json j = stunHeaderToJsonNlohmann(conn->header);
-                j.update({{"status", "disconnected"}});
+                if(conn != nullptr) {
 
-                conn->conn->send_text(j.dump());
-                conn->conn->close();
-
-                webSocketManager.remove(uuid);
+                    json j = stunHeaderToJsonNlohmann(conn->header);
+                    j.update({{"status", "disconnected"}});
+                    
+                    if(conn->conn != nullptr) {
+                        conn->conn->send_text(j.dump());
+                        conn->conn->close();
+                    }
+                    
+                    webSocketManager.remove(uuid);
+                    
+                }
 
                 return crow::response(200, stunHeaderToJson(stunRequest));
 

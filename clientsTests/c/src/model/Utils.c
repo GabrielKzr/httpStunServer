@@ -1,9 +1,7 @@
 #include "../include/Utils.h"
 
-cJSON* stun_header_to_json(const StunHeader* header) {
-    if (!header) return NULL;
-
-    cJSON* json = cJSON_CreateObject();
+void stun_header_to_json(cJSON* json, const StunHeader* header) {
+    if (!header) return;
 
     cJSON_AddNumberToObject(json, "type", header->type);
     cJSON_AddNumberToObject(json, "length", header->length);
@@ -21,8 +19,6 @@ cJSON* stun_header_to_json(const StunHeader* header) {
     // Adiciona transaction_id como string hexadecimal
     cJSON* tid_item = cJSON_CreateString(tid_hex);
     cJSON_AddItemToObject(json, "transaction_id", tid_item);
-
-    return json;
 }
 
 // Gera bytes aleatórios
@@ -33,35 +29,33 @@ void fill_random_bytes(uint8_t* buf, size_t len) {
 }
 
 // Cria um STUN request a partir de um UUID
-StunHeader create_stun_request(const uint8_t* uuid, int type) {
-    StunHeader header;
-
+void create_stun_request(StunHeader *header, const uint8_t* uuid, int type) {
     // Define campos básicos
-    header.type = type; // Binding Request (exemplo)
-    header.length = 0; // Suponha sem atributos
-    header.magic_cookie = MAGIC_COOKIE;
+    header->type = type; // Binding Request (exemplo)
+    header->length = 0; // Suponha sem atributos
+    header->magic_cookie = MAGIC_COOKIE;
 
-    printf("UUID string: %s (length: %zu)\n", uuid, strlen((char *)uuid));
+    // printf("UUID string: %s (length: %zu)\n", uuid, strlen((char *)uuid));
 
     char uuid_bytes[16];
     hex_to_bytes((char *)uuid, (unsigned char *)uuid_bytes, 16);
 
     // Copia o UUID fornecido
-    memcpy(header.uuid, uuid_bytes, 16);
+    memcpy(header->uuid, uuid_bytes, 16);
 
+    /*
     printf("UUID_BYTES: [");
-        for (int i = 0; i < 16; i++) {
-            printf("%d", uuid_bytes[i]);
-            if (i < 15) {
-                printf(", ");
-            }
+    for (int i = 0; i < 16; i++) {
+        printf("%d", uuid_bytes[i]);
+        if (i < 15) {
+            printf(", ");
         }
+    }
     printf("]\n");
+    */
 
     // Gera transaction ID aleatório
-    fill_random_bytes(header.transaction_id, 12);
-
-    return header;
+    fill_random_bytes(header->transaction_id, 12);
 }
 
 int hex_to_bytes(const char* hex, unsigned char* output, size_t output_len) {
@@ -99,7 +93,7 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
         return 0;
     }
 
-    printf("Arquivo não tava aberto ainda\n");
+    // printf("Arquivo não tava aberto ainda\n");
 
     FILE *fp = fopen(filename, "wb");  // ainda em modo binário, mas salva string
     if (!fp) {
@@ -121,7 +115,7 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
     size_t written = fwrite(uuid_hex_str, 1, 32, fp);
     fclose(fp);
 
-    printf("VALORES SALVOSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+    // printf("VALORES SALVOSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
 
     if (written != 32) {
         fprintf(stderr, "Erro: apenas %zu bytes foram escritos\n", written);
@@ -141,4 +135,56 @@ int remove_uuid_file() {
         perror("Erro ao remover o arquivo");
         return 0;
     }
+}
+
+int getUuidFromFile(char* buffer, size_t size, char* path) {
+
+    if (size < 32) {
+        printf("Erro: buffer pequeno demais, precisa de pelo menos 32 bytes.\n");
+        return 0;
+    }
+
+    FILE *file = fopen(path, "rb"); // Abre em modo binário para leitura
+    if (file == NULL) {
+        printf("Arquivo não existe.\n");
+        return 0; // Ou qualquer outro tratamento que quiser
+    }
+    // Move para o final para descobrir o tamanho
+    fseek(file, 0, SEEK_END);
+    long tamanho = ftell(file);
+    rewind(file); // Volta para o começo para ler
+
+    printf("Tamanho: %ld\n", tamanho);
+
+    if (tamanho != 32) {
+        printf("Arquivo existe, mas não tem 32 bytes (tem %ld bytes).\n", tamanho);
+        fclose(file);
+        exit(0);
+    }
+
+    size_t lidos = fread(buffer, 1, size, file);
+    fclose(file);
+
+    if (lidos != 32) {
+        printf("Erro ao ler o arquivo.\n");
+        exit(0);
+    }  
+
+    return (int)lidos;
+}
+
+int unxor_ip(char* ipXor, char* ipOut) {
+    uint8_t ip_parts[4];
+    if (sscanf(ipXor, "%hhu.%hhu.%hhu.%hhu", &ip_parts[0], &ip_parts[1], &ip_parts[2], &ip_parts[3]) != 4) return -1;
+
+    uint32_t xor_ip = (ip_parts[0] << 24) | (ip_parts[1] << 16) | (ip_parts[2] << 8) | ip_parts[3];
+    uint32_t original_ip = xor_ip ^ MAGIC_COOKIE;
+
+    snprintf(ipOut, 16, "%u.%u.%u.%u", (original_ip >> 24) & 0xFF, (original_ip >> 16) & 0xFF, (original_ip >> 8) & 0xFF, original_ip & 0xFF);
+
+    return 1;
+}
+
+inline int unxor_port(int xorPort) {
+    return xorPort ^ (MAGIC_COOKIE >> 16);
 }
