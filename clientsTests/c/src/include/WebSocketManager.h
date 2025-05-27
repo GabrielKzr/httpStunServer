@@ -26,8 +26,8 @@ typedef enum {
 
 StatusType get_status_type(const char *status);
 
-size_t callback_writeable(session_data_t* data, char* outBuffer);
-int callback_receive(cJSON* msg, char* outbuf);
+int callback_writeable(session_data_t* data, char* outBuffer);
+int callback_receive(cJSON* in, char* outbuf);
 
 int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
 

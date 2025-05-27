@@ -30,9 +30,10 @@ int verifyUUIDandConnect(const char* uuid, char* idToken) {
 
 int connectWithSavedUuid() {
 
-    char buffer[32];
+    char buffer[33];
 
     if(!getUuidFromFile(buffer, 32, "./uuid.txt")) return 0;
+    buffer[32] = '\0'; 
 
     websocket_connect((char*)buffer, NULL);
 
@@ -85,7 +86,7 @@ int getServerInfo() {
         }
 
         // Imprime a string UUID para depuração
-        printf("UUID (hex): %s\n", uuid_hex);
+        // printf("UUID (hex): %s\n", uuid_hex);
 
     } else {
         printf("Erro: UUID deve ser uma string\n");

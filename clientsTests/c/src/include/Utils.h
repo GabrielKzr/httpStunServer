@@ -14,4 +14,4 @@ int save_uuid_file(uint8_t *uuid_hex_str);
 int remove_uuid_file();
 int getUuidFromFile(char* buffer, size_t size, char* path);
 int unxor_ip(char* ipXor, char* ipOut);
-inline int unxor_port(int xorPort);
+int unxor_port(int xorPort);

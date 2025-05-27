@@ -1,9 +1,7 @@
 #include "../include/Utils.h"
 
 void stun_header_to_json(cJSON* json, const StunHeader* header) {
-    if (!header) return NULL;
-
-    json = cJSON_CreateObject();
+    if (!header) return;
 
     cJSON_AddNumberToObject(json, "type", header->type);
     cJSON_AddNumberToObject(json, "length", header->length);
@@ -37,7 +35,7 @@ void create_stun_request(StunHeader *header, const uint8_t* uuid, int type) {
     header->length = 0; // Suponha sem atributos
     header->magic_cookie = MAGIC_COOKIE;
 
-    printf("UUID string: %s (length: %zu)\n", uuid, strlen((char *)uuid));
+    // printf("UUID string: %s (length: %zu)\n", uuid, strlen((char *)uuid));
 
     char uuid_bytes[16];
     hex_to_bytes((char *)uuid, (unsigned char *)uuid_bytes, 16);
@@ -45,14 +43,16 @@ void create_stun_request(StunHeader *header, const uint8_t* uuid, int type) {
     // Copia o UUID fornecido
     memcpy(header->uuid, uuid_bytes, 16);
 
+    /*
     printf("UUID_BYTES: [");
-        for (int i = 0; i < 16; i++) {
-            printf("%d", uuid_bytes[i]);
-            if (i < 15) {
-                printf(", ");
-            }
+    for (int i = 0; i < 16; i++) {
+        printf("%d", uuid_bytes[i]);
+        if (i < 15) {
+            printf(", ");
         }
+    }
     printf("]\n");
+    */
 
     // Gera transaction ID aleatório
     fill_random_bytes(header->transaction_id, 12);
@@ -93,7 +93,7 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
         return 0;
     }
 
-    printf("Arquivo não tava aberto ainda\n");
+    // printf("Arquivo não tava aberto ainda\n");
 
     FILE *fp = fopen(filename, "wb");  // ainda em modo binário, mas salva string
     if (!fp) {
@@ -115,7 +115,7 @@ int save_uuid_file(uint8_t *uuid_hex_str) {
     size_t written = fwrite(uuid_hex_str, 1, 32, fp);
     fclose(fp);
 
-    printf("VALORES SALVOSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+    // printf("VALORES SALVOSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
 
     if (written != 32) {
         fprintf(stderr, "Erro: apenas %zu bytes foram escritos\n", written);
@@ -181,6 +181,8 @@ int unxor_ip(char* ipXor, char* ipOut) {
     uint32_t original_ip = xor_ip ^ MAGIC_COOKIE;
 
     snprintf(ipOut, 16, "%u.%u.%u.%u", (original_ip >> 24) & 0xFF, (original_ip >> 16) & 0xFF, (original_ip >> 8) & 0xFF, original_ip & 0xFF);
+
+    return 1;
 }
 
 inline int unxor_port(int xorPort) {

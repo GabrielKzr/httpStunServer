@@ -1,4 +1,4 @@
-#include "Chownat.h"
+#include "../include/Chownat.h"
 
 sem_t bin_sem;
 
@@ -283,7 +283,7 @@ int chownat_start(char* remoteaddr, int remoteport)
 }
 
 void *holepunch(void* args) {
-    struct Session_Data *data = (struct Session_Data *)args;
+    struct chownat_data *data = (struct chownat_data *)args;
     char *remoteaddr = data->remoteaddr;
     int remoteport = data->remoteport;
 
