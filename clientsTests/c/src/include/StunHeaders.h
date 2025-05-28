@@ -17,11 +17,11 @@ typedef struct {
 
 // Estrutura do cabeçalho STUN (28 bytes fixos (2 bytes de padding))
 typedef struct {
-    uint16_t type;           // Tipo da mensagem STUN
-    uint16_t length;         // Tamanho total dos atributos
-    uint32_t magic_cookie;   // Sempre 0x2112A442
-    uint8_t uuid[16]; // ID único de dispositivo
-    uint8_t transaction_id[12]; // ID único para rastrear mensagens
+    uint16_t type;               // Tipo da mensagem STUN
+    uint16_t length;             // Tamanho total dos atributos
+    uint32_t magic_cookie;       // Sempre 0x2112A442
+    char     uuid[33];           // ID único de dispositivo
+    char     transaction_id[25]; // ID único para rastrear mensagens
 } StunHeader;
 
 #endif

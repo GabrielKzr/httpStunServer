@@ -10,24 +10,6 @@
 
 #define PORT 3478
 
-int verifyUUIDandConnect(const char* uuid, char* idToken) {
-    if (!uuid) {
-        fprintf(stderr, "uuid ou idToken é NULL\n");
-        return 0;
-    }
-
-    // Valida o comprimento do UUID
-    size_t uuid_len = strlen(uuid);
-    if (uuid_len != 32) {
-        fprintf(stderr, "UUID inválido: %s (comprimento: %zu, esperado: 32)\n", uuid, uuid_len);
-        return 0;
-    }
-
-    websocket_connect(uuid, idToken);
-
-    return 1;
-}
-
 int connectWithSavedUuid() {
 
     char buffer[33];
@@ -74,20 +56,6 @@ int getServerInfo() {
             cJSON_Delete(root); 
             return 0;
         }
-
-        // Verifica se é um formato hexadecimal válido (apenas 0-9, a-f, A-F)
-        for (int i = 0; i < 32; i++) {
-            char c = uuid_hex[i];
-            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
-                printf("Erro: UUID contém caracteres não hexadecimais\n");
-                cJSON_Delete(root); 
-                return 0;
-            }
-        }
-
-        // Imprime a string UUID para depuração
-        // printf("UUID (hex): %s\n", uuid_hex);
-
     } else {
         printf("Erro: UUID deve ser uma string\n");
         cJSON_Delete(root); 
@@ -95,10 +63,7 @@ int getServerInfo() {
     }
 
     // Passa a string hexadecimal diretamente para verifyUUIDreceived
-    if (!verifyUUIDandConnect(uuid_hex, token_str)) {
-        printf("Erro tentando salvar UUID\n");
-        return 0;
-    }
+    websocket_connect(uuid_hex, token_str);
 
     cJSON_Delete(root);
 

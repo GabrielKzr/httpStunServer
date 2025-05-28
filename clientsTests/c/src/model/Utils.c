@@ -7,17 +7,10 @@ void stun_header_to_json(cJSON* json, const StunHeader* header) {
     cJSON_AddNumberToObject(json, "length", header->length);
     cJSON_AddNumberToObject(json, "magic_cookie", header->magic_cookie);
 
-    // Adiciona uuid como array de bytes
-    char uuid_hex[32] = {0};
-    bytes_to_hex((uint8_t*)header->uuid, 16, uuid_hex);
-    cJSON* uuid_array = cJSON_CreateString(uuid_hex);
+    cJSON* uuid_array = cJSON_CreateString(header->uuid);
     cJSON_AddItemToObject(json, "uuid", uuid_array);
 
-    // Adiciona transaction_id como array de bytes
-    char tid_hex[24]; // 24 caracteres + terminador nulo
-    bytes_to_hex(header->transaction_id, 12, tid_hex);
-    // Adiciona transaction_id como string hexadecimal
-    cJSON* tid_item = cJSON_CreateString(tid_hex);
+    cJSON* tid_item = cJSON_CreateString(header->transaction_id);
     cJSON_AddItemToObject(json, "transaction_id", tid_item);
 }
 
@@ -29,33 +22,28 @@ void fill_random_bytes(uint8_t* buf, size_t len) {
 }
 
 // Cria um STUN request a partir de um UUID
-void create_stun_request(StunHeader *header, const uint8_t* uuid, int type) {
+void create_stun_request(StunHeader *header, const char* uuid, int type) {
     // Define campos básicos
     header->type = type; // Binding Request (exemplo)
     header->length = 0; // Suponha sem atributos
     header->magic_cookie = MAGIC_COOKIE;
 
-    // printf("UUID string: %s (length: %zu)\n", uuid, strlen((char *)uuid));
-
-    char uuid_bytes[16];
-    hex_to_bytes((char *)uuid, (unsigned char *)uuid_bytes, 16);
-
-    // Copia o UUID fornecido
-    memcpy(header->uuid, uuid_bytes, 16);
-
-    /*
-    printf("UUID_BYTES: [");
-    for (int i = 0; i < 16; i++) {
-        printf("%d", uuid_bytes[i]);
-        if (i < 15) {
-            printf(", ");
-        }
-    }
-    printf("]\n");
-    */
+    if(strlen(uuid) != 32) return;
+    strncpy(header->uuid, uuid, 32);
+    header->uuid[32] = '\0';
 
     // Gera transaction ID aleatório
-    fill_random_bytes(header->transaction_id, 12);
+    uint8_t tid[12];
+    fill_random_bytes(tid, 12);
+
+    for(int i = 0; i < 12; i++) {
+        sprintf(header->transaction_id+i*2, "%02X", tid[i]);
+    }
+    header->transaction_id[24] = '\0';
+    for (int i = 0; i < 24; i++) {
+        header->transaction_id[i] = (char)tolower((unsigned char)header->transaction_id[i]);
+    }
+    printf("TRANSACTION_ID: %s\n", header->transaction_id);
 }
 
 int hex_to_bytes(const char* hex, unsigned char* output, size_t output_len) {
@@ -84,7 +72,7 @@ void bytes_to_hex(const uint8_t* input, size_t len, char* output) {
     output[len * 2] = '\0'; // Terminador nulo
 }
 
-int save_uuid_file(uint8_t *uuid_hex_str) {
+int save_uuid_file(char *uuid_hex_str) {
 
     const char *filename = "uuid.txt";
 
