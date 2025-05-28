@@ -373,7 +373,7 @@ int websocket_connect(const char* uuid, char* idToken) {
 
     memset(&connect_info, 0, sizeof(connect_info));
     connect_info.context = context;
-    connect_info.address = "192.168.80.107";
+    connect_info.address = "10.0.0.20";
     connect_info.host = connect_info.address;
     connect_info.origin = connect_info.address;
     connect_info.port = 18080;
