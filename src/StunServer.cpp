@@ -304,7 +304,7 @@ crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::strin
 
 crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn) {
 
-    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+    std::string uuid = std::string(stunRequest.uuid);
 
     std::cout << "CLIENT BIND SEM AUTH\n";
 
@@ -390,7 +390,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
     json j;
     int statusCode = 0;
 
-    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+    std::string uuid = std::string(stunRequest.uuid);
 
     // precisa ativar quando vincular com o dart
     if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
@@ -456,7 +456,7 @@ crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket
 
     int statusCode = 0;
 
-    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+    std::string uuid = std::string(stunRequest.uuid);
 
     if(webSocketManager.get_connection(uuid) == nullptr) {
 
@@ -524,7 +524,7 @@ bool StunServer::clientHasUuid(const std::string& uuid, const std::string& idTok
 
 crow::response StunServer::exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp, const std::string& authId) {
 
-    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+    std::string uuid = std::string(stunRequest.uuid);
 
     std::string localId;
 
@@ -615,7 +615,7 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
 crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* authId) {
 
     std::string localId;
-    std::string uuid = bytes_to_hex(stunRequest.uuid, 16);
+    std::string uuid = std::string(stunRequest.uuid);
 
     if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
         std::cout << "Não foi possível autenticar cliente\n";

@@ -34,27 +34,16 @@ StunHeader jsonToStunHeader(const crow::json::rvalue& json) {
         throw std::runtime_error("Campo 'uuid' é obrigatório");
     }
     std::string uuid_str = json["uuid"].s();
-
-    std::cout << uuid_str << std::endl;
-
-    if (uuid_str.length() != 32) { // 16 bytes * 2 (cada byte vira 2 chars hex)
-        throw std::runtime_error("UUID deve ter 32 caracteres hexadecimais");
-    } else {
-        std::cout << uuid_str.size() << std::endl;
-    }
-
-    std::cout << "ADASFMDFKAMSFAKSMASKD\n";
-    hex_to_bytes(uuid_str, header.uuid, 16);
+    memcpy(header.uuid, uuid_str.c_str(), 32);
+    header.uuid[32] = '\0';
 
     // Transaction ID - obrigatório, agora como string hexadecimal
     if (!json.has("transaction_id")) {
         throw std::runtime_error("Campo 'transaction_id' é obrigatório");
     }
     std::string tid_str = json["transaction_id"].s();
-    if (tid_str.length() != 24) { // 12 bytes * 2 (cada byte vira 2 chars hex)
-        throw std::runtime_error("Transaction ID deve ter 24 caracteres hexadecimais");
-    }
-    hex_to_bytes(tid_str, header.transaction_id, 12);
+    memcpy(header.transaction_id, tid_str.c_str(), 24);
+    header.transaction_id[24] = '\0';
 
     return header;
 }
@@ -85,20 +74,16 @@ StunHeader jsonNlohmannToStunHeader(const json& json) {
         throw std::runtime_error("Campo 'uuid' é obrigatório e deve ser uma string");
     }
     std::string uuid_str = json["uuid"].get<std::string>();
-    if (uuid_str.length() != 32) { // 16 bytes * 2 (cada byte vira 2 chars hex)
-        throw std::runtime_error("UUID deve ter 32 caracteres hexadecimais");
-    }
-    hex_to_bytes(uuid_str, header.uuid, 16);
+    memcpy(header.uuid, uuid_str.c_str(), 32);
+    header.uuid[32] = '\0';
 
     // Transaction ID - obrigatório, agora como string hexadecimal
     if (!json.contains("transaction_id") || !json["transaction_id"].is_string()) {
         throw std::runtime_error("Campo 'transaction_id' é obrigatório e deve ser uma string");
     }
     std::string tid_str = json["transaction_id"].get<std::string>();
-    if (tid_str.length() != 24) { // 12 bytes * 2 (cada byte vira 2 chars hex)
-        throw std::runtime_error("Transaction ID deve ter 24 caracteres hexadecimais");
-    }
-    hex_to_bytes(tid_str, header.transaction_id, 12);
+    memcpy(header.transaction_id, tid_str.c_str(), 24);
+    header.transaction_id[24] = '\0';
 
     return header;
 }
@@ -121,10 +106,10 @@ crow::json::wvalue stunHeaderToJson(const StunHeader& header) {
     json["magic_cookie"] = header.magic_cookie;
 
     // UUID como string hexadecimal
-    json["uuid"] = bytes_to_hex(header.uuid, 16);
+    json["uuid"] = std::string(header.uuid);
 
     // Transaction ID como string hexadecimal
-    json["transaction_id"] = bytes_to_hex(header.transaction_id, 12);
+    json["transaction_id"] = std::string(header.transaction_id);
 
     return json;
 }
@@ -142,9 +127,9 @@ json stunHeaderToJsonNlohmann(const StunHeader& header) {
 
     j["magic_cookie"] = header.magic_cookie;
 
-    j["uuid"] = bytes_to_hex(header.uuid, 16);
+    j["uuid"] = std::string(header.uuid);
 
-    j["transaction_id"] = bytes_to_hex(header.transaction_id, 12);
+    j["transaction_id"] = std::string(header.transaction_id);
 
     return j;
 }
@@ -207,113 +192,19 @@ json xorMappedAddressToJsonNlohmann(const XorMappedAddress& xorAddr) {
     return j;
 }
 
-void generateUUIDBytes(uint8_t uuidArray[16]) {
+void generateUUIDBytes(char uuidArray[33]) {
     boost::uuids::random_generator generator;
     boost::uuids::uuid uuid = generator(); // Usa o gerador estático
-    std::memcpy(uuidArray, uuid.data, 16);
-}
 
-std::string base64_encode(const unsigned char* bytes, size_t length) {
-    const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string ret;
-    int i = 0, j = 0;
-    unsigned char char_array_3[3], char_array_4[4];
-
-    for (size_t n = 0; n < length; n++) {
-        char_array_3[i++] = bytes[n];
-        if (i == 3) {
-            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-            char_array_4[3] = char_array_3[2] & 0x3f;
-
-            for (i = 0; i < 4; i++)
-                ret += base64_chars[char_array_4[i]];
-            i = 0;
-        }
+    for(int i = 0; i < 16; i++) {
+        sprintf(uuidArray+i*2, "%02X", uuid.data[i]);
     }
 
-    if (i) {
-        for (j = i; j < 3; j++)
-            char_array_3[j] = '\0';
+    uuidArray[32] = '\0';
 
-        char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-        char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-        char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-
-        for (j = 0; j < i + 1; j++)
-            ret += base64_chars[char_array_4[j]];
-
-        while (i++ < 3)
-            ret += '=';
+    for (int i = 0; i < 32; i++) {
+        uuidArray[i] = std::tolower(static_cast<unsigned char>(uuidArray[i]));
     }
-
-    return ret;
-}
-
-std::string base64_decode(const std::string& encoded_string) {
-    const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string decoded_data;
-    int in_len = encoded_string.size();
-    int i = 0, j = 0;
-    unsigned char char_array_4[4], char_array_3[3];
-
-    while (in_len-- && encoded_string[i] != '=' && base64_chars.find(encoded_string[i]) != std::string::npos) {
-        char_array_4[j++] = encoded_string[i++];
-        if (j == 4) {
-            for (int k = 0; k < 4; k++) {
-                char_array_4[k] = base64_chars.find(char_array_4[k]);
-            }
-
-            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-            char_array_3[1] = ((char_array_4[1] & 0x0f) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-            char_array_3[2] = ((char_array_4[2] & 0x03) << 6) + char_array_4[3];
-
-            decoded_data.append(reinterpret_cast<char*>(char_array_3), 3);
-            j = 0;
-        }
-    }
-
-    if (j) {
-        for (int k = j; k < 4; k++) {
-            char_array_4[k] = 0;
-        }
-        for (int k = 0; k < 4; k++) {
-            char_array_4[k] = base64_chars.find(char_array_4[k]);
-        }
-
-        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-        char_array_3[1] = ((char_array_4[1] & 0x0f) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-
-        decoded_data.append(reinterpret_cast<char*>(char_array_3), j - 1);
-    }
-
-    return decoded_data;
-}
-
-void hex_to_bytes(const std::string& hex, uint8_t* output, size_t output_len) {
-    if (hex.length() < output_len * 2) {
-        throw std::runtime_error("String hexadecimal muito curta");
-    }
-    for (size_t i = 0; i < output_len; ++i) {
-        std::string byte_str = hex.substr(i * 2, 2);
-        try {
-            output[i] = static_cast<uint8_t>(std::stoi(byte_str, nullptr, 16));
-        } catch (...) {
-            throw std::runtime_error("Formato hexadecimal inválido");
-        }
-    }
-}
-
-std::string bytes_to_hex(const uint8_t* input, size_t len) {
-    std::string result;
-    result.reserve(len * 2);
-    const char hex_chars[] = "0123456789abcdef";
-    for (size_t i = 0; i < len; ++i) {
-        result += hex_chars[(input[i] >> 4) & 0x0F]; // Nibble superior
-        result += hex_chars[input[i] & 0x0F];       // Nibble inferior
-    }
-    return result;
 }
 
 bool jsonContainsUUID(const nlohmann::json& j, const std::string& uuid) {

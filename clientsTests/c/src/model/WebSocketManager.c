@@ -293,7 +293,7 @@ int callback_receive(cJSON* msg, char* outbuf) {
         return -2; // -2, porque < 0 ele só da break e não escreve nada, mas não é um erro, se precisar tratar, é possível diferenciar
     }
 
-    case STATUS_DISCONNECTED:
+    case STATUS_DISCONNECTED: // na verdade é "removed"
     case STATUS_ABSENT: {
         
         cJSON *tid = cJSON_GetObjectItemCaseSensitive(msg, "transaction_id");
@@ -420,6 +420,7 @@ int websocket_connect(const char* uuid, char* idToken) {
         printf("************* LIMPEI A LISTAAAAAAAAA **********************\n");
         list_clear(list);
         free(list);
+        list = NULL;
     }
 
     sleep(5);
