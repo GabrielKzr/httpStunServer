@@ -22,7 +22,7 @@ void fill_random_bytes(uint8_t* buf, size_t len) {
 }
 
 // Cria um STUN request a partir de um UUID
-void create_stun_request(StunHeader *header, const char* uuid, int type) {
+void create_stun_request(StunHeader *header, const unsigned char* uuid, int type) {
     // Define campos básicos
     header->type = type; // Binding Request (exemplo)
     header->length = 0; // Suponha sem atributos
@@ -44,32 +44,6 @@ void create_stun_request(StunHeader *header, const char* uuid, int type) {
         header->transaction_id[i] = (char)tolower((unsigned char)header->transaction_id[i]);
     }
     printf("TRANSACTION_ID: %s\n", header->transaction_id);
-}
-
-int hex_to_bytes(const char* hex, unsigned char* output, size_t output_len) {
-    if (strlen(hex) < output_len * 2) {
-        return 0; // String muito curta
-    }
-    for (size_t i = 0; i < output_len; ++i) {
-        char byte_str[3] = {hex[i * 2], hex[i * 2 + 1], '\0'};
-        char* endptr;
-        long byte = strtol(byte_str, &endptr, 16);
-        if (endptr != byte_str + 2 || byte < 0 || byte > 255) {
-            return 0; // Formato inválido
-        }
-        output[i] = (unsigned char)byte;
-    }
-    return 1; // Sucesso
-}
-
-// Função auxiliar para converter bytes para string hexadecimal
-void bytes_to_hex(const uint8_t* input, size_t len, char* output) {
-    const char hex_chars[] = "0123456789abcdef";
-    for (size_t i = 0; i < len; ++i) {
-        output[i * 2] = hex_chars[(input[i] >> 4) & 0x0F]; // Nibble superior
-        output[i * 2 + 1] = hex_chars[input[i] & 0x0F];   // Nibble inferior
-    }
-    output[len * 2] = '\0'; // Terminador nulo
 }
 
 int save_uuid_file(char *uuid_hex_str) {

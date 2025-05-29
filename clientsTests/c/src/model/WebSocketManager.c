@@ -84,6 +84,39 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
             break;
 
         case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE:
+            printf("[client] Servidor fechou conexão\n");
+            interrupted = 1;
+            lws_cancel_service(lws_get_context(wsi));
+
+            char *msg = malloc(len-2);
+            if (msg) {
+                memcpy(msg, (char *)in +2, len-2);
+                msg[len-2] = '\0'; // Garante terminação nula
+
+                // Exibe o código de status e a mensagem
+
+                printf("Mensagem de fechamento: %s\n", msg);
+            }
+
+            cJSON *json = cJSON_Parse(msg); // só é permitido receber dados em formato de json
+            if (!json) {
+                fprintf(stderr, "Erro ao parsear JSON recebido!\n");
+                free(msg);
+                break;
+            }
+            
+            char buf[32] = {0};
+            int len = callback_receive(json, buf);
+
+            free(msg);
+
+            if(len) {
+                printf("Resposta do servidor incoerente\n");
+                return -1;
+            }
+            
+            break;
+
         case LWS_CALLBACK_CLOSED:
             printf("[client] Conexão fechada\n");
             interrupted = 1;
@@ -312,6 +345,8 @@ int callback_receive(cJSON* msg, char* outbuf) {
         list_remove(list, entry);
 
         int ret = remove_uuid_file();
+
+        printf("Arquivo de uuid removido\n");
         
         if(ret < 0) return -1;
 
@@ -373,7 +408,7 @@ int websocket_connect(const char* uuid, char* idToken) {
 
     memset(&connect_info, 0, sizeof(connect_info));
     connect_info.context = context;
-    connect_info.address = "10.0.0.20";
+    connect_info.address = "localhost";
     connect_info.host = connect_info.address;
     connect_info.origin = connect_info.address;
     connect_info.port = 18080;

@@ -321,8 +321,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         if (!jsonContainsUUID(jsonData, uuid)) {
             std::cout << "UUID não encontrado no JSON!" << std::endl;
-            conn->send_text(json{{"status", "absent"}, {"message", "UUID não encontrado no JSON"}}.dump());
-            conn->close(); // fecha conexão, pois não está autenticada
+            conn->close(json{{"status", "absent"}, {"message", "UUID não encontrado no JSON"}}.dump()); // fecha conexão, pois não está autenticada
             return crow::response(400, "error: não foi possível encontrar uuid");
         }
 
