@@ -315,13 +315,13 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
         if (!jsonData.contains("documents")) {
             std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
-            conn->send_text(json{{"status", "error"}, {"message", "Firebase não contém documentos"}}.dump());
+            conn->send_text(json{{"status", "error"}, {"message", "Firebase não contém documentos"}}.dump()); // não pode mandar o stunHEader inteiro por limitação de 125 bytes apenas nno close (definição do RFC)
             return crow::response(400, "error: não foi possível encontrar documento");
         }
 
         if (!jsonContainsUUID(jsonData, uuid)) {
             std::cout << "UUID não encontrado no JSON!" << std::endl;
-            conn->close(json{{"status", "absent"}, {"message", "UUID não encontrado no JSON"}}.dump()); // fecha conexão, pois não está autenticada
+            conn->close(json{{"status", "absent"}, {"transaction_id", std::string(stunRequest.transaction_id)}}.dump()); // fecha conexão, pois não está autenticada
             return crow::response(400, "error: não foi possível encontrar uuid");
         }
 

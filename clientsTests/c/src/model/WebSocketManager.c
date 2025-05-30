@@ -88,6 +88,8 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
             interrupted = 1;
             lws_cancel_service(lws_get_context(wsi));
 
+            if(in == NULL) return -1;
+
             char *msg = malloc(len-2);
             if (msg) {
                 memcpy(msg, (char *)in +2, len-2);
