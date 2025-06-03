@@ -4,6 +4,7 @@
 #include <cjson/cJSON.h>
 #include <libwebsockets.h>
 #include "list.h"
+#include "FileChangeInterrupted.h"
 
 #define BUFFER_SIZE 2048
 
@@ -11,7 +12,8 @@
 
 typedef struct {
     unsigned char uuid[33];
-    char idToken[2048];
+    char idToken[2049];
+    WatcherArgs* watcher;
 } session_data_t;
 
 typedef enum {
@@ -28,6 +30,9 @@ StatusType get_status_type(const char *status);
 
 int callback_writeable(session_data_t* data, char* outBuffer);
 int callback_receive(cJSON* in, char* outbuf);
+int callback_file_interrupt(int, char[][MAX_LINE_LEN]);
+
+void* callback_file_interrupt_thread(void* args);
 
 int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
 

@@ -8,6 +8,7 @@ incdir = include_directories('src/include')
 
 src = [
   'src/model/TcpConnection.c',
+  'src/model/FileChangeInterrupted.c',
   'src/main.c',
   'src/model/Utils.c',
   'src/model/WebSocketManager.c',

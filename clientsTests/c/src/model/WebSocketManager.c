@@ -273,7 +273,9 @@ int callback_receive(cJSON* msg, char* outbuf) {
             return -1;
         }
 
-        printf("SETUP COMPLETO\n");
+        printf("SETUP COMPLETO\n"); // AQUI É ONDE REALMENTE PODE CONSIDERAR QUE O ROTEADOR ESTÁ CONECTADO
+
+
 
         return -2; // -2, porque < 0 ele só da break e não escreve nada, mas não é um erro, se precisar tratar, é possível diferenciar
     }
@@ -382,6 +384,20 @@ int callback_receive(cJSON* msg, char* outbuf) {
     }
 }
 
+void* callback_file_interrupt_thread(void *args) {
+    WatcherArgs* watcher = (WatcherArgs*) args; 
+
+    fileWatcher(watcher->nomeArquivo, watcher->diretorio, watcher->callback_function, watcher->closed);
+
+    return NULL;
+}
+
+int callback_file_interrupt(int type, char diff[][MAX_LINE_LEN]) {
+    
+
+
+}
+
 int websocket_connect(const char* uuid, char* idToken) {
 
     struct lws_context_creation_info context_info = {0};
@@ -390,6 +406,7 @@ int websocket_connect(const char* uuid, char* idToken) {
     size_t uuid_len;
     struct lws *wsi;
     session_data_t *data;
+    int closed = 0;
 
     chownat_init();
 
@@ -437,6 +454,8 @@ int websocket_connect(const char* uuid, char* idToken) {
         return 0;
     }
 
+    memset(data, 0, sizeof(session_data_t));
+
     strncpy((char *)data->uuid, uuid, 32);
     data->uuid[32] = '\0'; 
 
@@ -446,6 +465,14 @@ int websocket_connect(const char* uuid, char* idToken) {
     } else {
         data->idToken[0] = '\0'; 
     }
+
+    WatcherArgs* watcher = malloc(sizeof(WatcherArgs));
+    watcher->nomeArquivo = "dhcp.leases";
+    watcher->nomeArquivo = "/tmp";
+    watcher->callback_function = callback_file_interrupt;
+    watcher->closed = &closed;
+
+    data->watcher = watcher;
 
     while (!interrupted) {
         lws_service(context, 100);
