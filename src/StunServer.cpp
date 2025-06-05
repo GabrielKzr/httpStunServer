@@ -206,103 +206,120 @@ crow::response StunServer::handleRequest(const crow::request& req) {
 
 crow::response StunServer::handlePost(const crow::request& req) {
 
-    StunHeader stunRequest;
     crow::response response;
     const std::string* clientIp = &(req.remote_ip_address);
+    nlohmann::json_abi_v3_11_3::json json_body;
     
 // -------------------------- análise do stun request --------------------------
 
-    auto json_body = crow::json::load(req.body);
-
-    if (!json_body) {
-        return crow::response(400, "header received invalid");
-    }
-    
     try {
-        stunRequest = jsonToStunHeader(json_body);
+        json_body = json::parse(req.body);
+    } catch(...) {
+        return crow::response(400, "header received is not a json");
+    }
+
+// -------------------------------------------------------------------------------------
+
+    // ------------------------- verificação do tipo de request ----------------------------
+
+    return this->detectRequestTypeHttp(json_body, clientIp);
+
+    // --------------------------------------------------------------------------------------
+}
+
+crow::response StunServer::detectRequestTypeHttp(json j, const std::string *clientIp) {
+    
+    StunHeader stunRequest;
+    std::string auth_id;
+
+    try {
+        stunRequest = jsonNlohmannToStunHeader(j);
     } catch(const std::exception& e) {
         std::cout << "Header received Invalid\n";
         return crow::response(400, "header received invalid");
     }
 
-    // Análise de máximo de conexões, porém vai ser com websockets, e está relacionada com o roteador, talvez seja outra ponta do server
-
     if(stunRequest.magic_cookie != MAGIC_COOKIE) {
         return crow::response(400, "header receiver invalid - magic cookie different");
     }
 
-// -------------------------------------------------------------------------------------
-
-    std::string auth_id;
-
-    if (json_body.has("auth_id")) {
-
-        auth_id = json_body["auth_id"].s();
-
-    } else {
-
-        crow::response(400, "Necessário ID de indentificação");
-
-    }
-
-    std::cout << "Cheguei aqui\n";
-    // ------------------------- verificação do tipo de request ----------------------------
-
-    return this->detectRequestType(stunRequest, &auth_id, nullptr, clientIp);;
-
-    // --------------------------------------------------------------------------------------
-
-}
-
-crow::response StunServer::detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp) {
-
-    std::cout << stunRequest.type << std::endl;
+    if(j.contains("auth_id")) {
+        auth_id = j["auth_id"].get<std::string>();
+    } 
 
     switch (stunRequest.type)
     {
-    case 0x0001: // binding request
+    case 0x0002:
 
-        return this->sendToRouter(stunRequest, conn, authId);
-    
-    case 0x0002: // ip request 
+        return this->exchangeIpRequest(stunRequest, *clientIp, auth_id);
 
-        std::cout << "Ip exchange request\n";
+    case 0x0003:
 
-        return this->exchangeIpRequest(stunRequest, *clientIp, *authId);
-
-    // provavelmente depois vão ter mais tipos de request
-
-    case 0x0003: // uuid request
-
-        // transformar isso em uma função 
-
-        return this->uuidResponse(stunRequest, authId);
-
-    case 0x0004: // recebido do router 
-
-        return this->clientBind(stunRequest, conn, authId);
-
-    case 0x0005: // recebido do router
-
-        return this->clientBind(stunRequest, conn);
+        return this->uuidResponse(stunRequest, &auth_id);
 
     case 0x0006:
 
-        return this->removeClient(stunRequest, authId);
+        return this->removeClient(stunRequest, auth_id);
 
     case 0x0007:
 
         return this->getRemoteIp(stunRequest, *clientIp);
 
     default:
-
-        return crow::response(404, "stun request type does not exist");
+        return crow::response(400, "stun request type does not exist");
+        break;
     }
-
-    return crow::response(200, "testando post");
 }
 
-crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn) {
+void StunServer::detectRequestTypeWs(json j, crow::websocket::connection* conn) {
+
+    StunHeader stunRequest;
+    std::string auth_id = "";
+    
+    try {
+        stunRequest = jsonNlohmannToStunHeader(j);
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Erro ao parsear para stunRequest: " << e.what() << std::endl;
+        conn->send_text(json{{"status", "error"}, {"message", "Chaves inválidas"}}.dump());
+    }
+
+    if(j.contains("auth_id")) {
+        auth_id = j["auth_id"].get<std::string>();
+    }
+
+    switch (stunRequest.type)
+    {
+    case 0x0001:
+
+        return this->sendToRouter(stunRequest, conn, &auth_id);
+    
+    case 0x0004:
+
+        return this->clientBind(stunRequest, conn, &auth_id);
+
+    case 0x0005:
+
+        return this->clientBind(stunRequest, conn);
+
+    case 0x0008:
+        printf("Recebido notify request\n");
+        break;
+
+    case 0x0009:
+        printf("Recebido notify request\n");
+        break;
+
+    case 0x000A:
+        printf("Recebido notify request\n");
+        break;
+        
+    default:
+        conn->send_text(json{{"status", "error"}, {"message", "Tipo de requisição STUN desconhecido"}}.dump());
+        break;
+    }
+}
+
+void StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn) {
 
     std::string uuid = std::string(stunRequest.uuid);
 
@@ -316,13 +333,13 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         if (!jsonData.contains("documents")) {
             std::cerr << "Resposta do Firebase não contém documentos: " << response << std::endl;
             conn->send_text(json{{"status", "error"}, {"message", "Firebase não contém documentos"}}.dump()); // não pode mandar o stunHEader inteiro por limitação de 125 bytes apenas nno close (definição do RFC)
-            return crow::response(400, "error: não foi possível encontrar documento");
+            return;
         }
 
         if (!jsonContainsUUID(jsonData, uuid)) {
             std::cout << "UUID não encontrado no JSON!" << std::endl;
             conn->close(json{{"status", "absent"}, {"transaction_id", std::string(stunRequest.transaction_id)}}.dump()); // fecha conexão, pois não está autenticada
-            return crow::response(400, "error: não foi possível encontrar uuid");
+            return;
         }
 
         // 2. Itera sobre os documentos
@@ -367,7 +384,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
       
         conn->send_text(responseJson.dump());
 
-        return crow::response(200, "success: status de roteador atualizado com sucesso");
+        return;
 
     } catch (const std::exception& e) {
 
@@ -377,12 +394,12 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         });
 
         std::cerr << "Erro ao processar fechamento de conexão: " << e.what() << std::endl;
-        return crow::response(400, "error: Erro ao comunicar com o Firebase");
+        return;
     }
 }
 
 // aqui só entra depois que o roteador já confirmou a validade das informações (tudo validado com authId)
-crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
+void StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
 
     std::string localId;
 
@@ -393,7 +410,7 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
 
     // precisa ativar quando vincular com o dart
     if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
-        return crow::response(400, "Auth ID invalid");
+        return;
     }
 
     if(!addRouterToUser(localId, uuid, true)) {
@@ -429,11 +446,11 @@ crow::response StunServer::clientBind(StunHeader& stunRequest, crow::websocket::
         conn->send_text(j.dump());
     }
 
-    return crow::response(statusCode, j.dump());
+    return;
 }
 
 // função que manda para roteador salvar uuid (não salva nada no servidor ainda)
-crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
+void StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
 
     json j;
 
@@ -441,14 +458,14 @@ crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket
         j = stunHeaderToJsonNlohmann(stunRequest);
         j.update({{"status", "error"}});
         conn->send_text(j.dump());
-        return crow::response(400, "Missing auth ID");
+        return;
     }
 
     if(!firebaseManager->verifyGoogleIdToken(*authId)) {
         j = stunHeaderToJsonNlohmann(stunRequest);
         j.update({{"status", "error"}});
         conn->send_text(j.dump());
-        return crow::response(400, "Auth ID invalid");
+        return;
     }
 
     std::cout << "Entro no sendToRouter\n";
@@ -477,7 +494,7 @@ crow::response StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket
         conn->send_text(j.dump());
     }
 
-    return crow::response(statusCode, j.dump());
+    return;
 }
 
 bool StunServer::clientHasUuid(const std::string& uuid, const std::string& idToken) {
@@ -611,12 +628,12 @@ crow::response StunServer::uuidResponse(StunHeader& stunRequest, std::string* au
     return crow::response(200, stunHeaderToJson(stunRequest));
 }
 
-crow::response StunServer::removeClient(StunHeader& stunRequest, std::string* authId) {
+crow::response StunServer::removeClient(StunHeader& stunRequest, std::string authId) {
 
     std::string localId;
     std::string uuid = std::string(stunRequest.uuid);
 
-    if(!firebaseManager->verifyGoogleIdToken(*authId, &localId)) {
+    if(!firebaseManager->verifyGoogleIdToken(authId, &localId)) {
         std::cout << "Não foi possível autenticar cliente\n";
         return crow::response(400, "Autenticação do Google inválida");
     }
@@ -722,32 +739,7 @@ void StunServer::handleWebSocketMessage(crow::websocket::connection& conn, const
 
             json j = json::parse(data);
 
-            StunHeader stunRequest;
-
-            try {
-                stunRequest = jsonNlohmannToStunHeader(j);
-            } catch (const std::runtime_error& e) {
-                std::cerr << "Erro ao parsear para stunRequest: " << e.what() << std::endl;
-                conn.send_text(json{{"status", "error"}, {"message", "Chaves inválidas"}}.dump());
-            }
-
-
-            if (j.contains("auth_id")) {
-
-                std::string auth_id;
-                auth_id = j["auth_id"].get<std::string>();
-
-                std::cout << "||||||||||||||||||||||||||||||\n";
-                std::cout << auth_id;
-
-                this->detectRequestType(stunRequest, &auth_id, &conn, nullptr);
-
-            } else {
-
-                std::cout << "Ta sem authId\n";
-
-                this->detectRequestType(stunRequest, nullptr, &conn, nullptr);
-            }
+            this->detectRequestTypeWs(j, &conn);
 
         } catch (const json::exception& e) {
             std::cout << "Erro ao parsear JSON: " << e.what() << std::endl;

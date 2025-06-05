@@ -86,14 +86,16 @@ class StunServer {
         bool handleWebSocketDisconnect(std::string uuid, std::string reason);
         bool clientHasUuid(const std::string& uuid, const std::string& idToken);
 
+        void detectRequestTypeWs(json j, crow::websocket::connection* conn);
+        crow::response detectRequestTypeHttp(json j, const std::string *clientIp = nullptr);
         crow::response detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp);
-        crow::response clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
-        crow::response clientBind(StunHeader& stunRequest, crow::websocket::connection* conn);
+        void clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
+        void clientBind(StunHeader& stunRequest, crow::websocket::connection* conn);
         crow::response exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp, const std::string& authId);
         crow::response exchangeIpPort(connInfo *conn, int port, const std::string& clientIp, const StunHeader& stunRequest);
         crow::response uuidResponse(StunHeader& stunRequest, std::string* authId);
-        crow::response sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
-        crow::response removeClient(StunHeader& stunRequest, std::string* authId);
+        void sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
+        crow::response removeClient(StunHeader& stunRequest, std::string authId);
 
         // ação de stunServer
         crow::response getRemoteIp(StunHeader& stunRequest, const std::string clientIp);

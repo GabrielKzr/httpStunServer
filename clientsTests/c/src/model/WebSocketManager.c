@@ -478,13 +478,13 @@ void notify_add(struct lws* wsi, char diff[][MAX_LINE_LEN], int len) {
 void notify_remove(struct lws* wsi, char diff[][MAX_LINE_LEN], int len) {
     printf("Enviando requisição de remove para o servidor\n");
 
-    notify_send_request(wsi, diff, len, 0x0008, "notify_remove");
+    notify_send_request(wsi, diff, len, 0x0009, "notify_remove");
 }
 
 void notify_alteration(struct lws* wsi, char diff[][MAX_LINE_LEN], int len) {
     printf("Enviando requisição de alteração para o servidor\n");
 
-    notify_send_request(wsi, diff, len, 0x0008, "notify_alteration");
+    notify_send_request(wsi, diff, len, 0x000A, "notify_alteration");
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
