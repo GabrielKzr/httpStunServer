@@ -90,6 +90,16 @@ int save_uuid_file(char *uuid_hex_str) {
 int remove_uuid_file() {
     const char *filename = "uuid.txt";
 
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        printf("Diretório atual: %s\n", cwd);
+    }
+
+    if (access(filename, F_OK) != 0) {
+        perror("Arquivo não existe ou não acessível");
+        return 0;
+    }
+
     if (remove(filename) == 0) {
         printf("Arquivo %s removido com sucesso.\n", filename);
         return 1;

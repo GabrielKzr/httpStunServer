@@ -470,8 +470,6 @@ void StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connecti
 
     std::cout << "Entro no sendToRouter\n";
 
-    int statusCode = 0;
-
     std::string uuid = std::string(stunRequest.uuid);
 
     if(webSocketManager.get_connection(uuid) == nullptr) {
@@ -480,7 +478,6 @@ void StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connecti
 
         j = stunHeaderToJsonNlohmann(stunRequest);
         j.update({{"status", "success"}, {"auth_id", *authId}});
-        statusCode = 200;
 
         conn->send_text(j.dump());
 
@@ -489,8 +486,7 @@ void StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connecti
 
         j = stunHeaderToJsonNlohmann(stunRequest);
         j.update({{"status", "error"}});
-        statusCode = 400;
-
+        
         conn->send_text(j.dump());
     }
 
