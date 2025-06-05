@@ -10,12 +10,6 @@
 
 #define NUM_THREADS 5
 
-typedef struct {
-    unsigned char uuid[33];
-    char idToken[2049];
-    WatcherArgs* watcher;
-} session_data_t;
-
 typedef enum {
     STATUS_UNKNOWN,
     STATUS_BIND_SUCCESS,
@@ -29,8 +23,13 @@ typedef enum {
 StatusType get_status_type(const char *status);
 
 int callback_writeable(session_data_t* data, char* outBuffer);
-int callback_receive(cJSON* in, char* outbuf);
-int callback_file_interrupt(int, char[][MAX_LINE_LEN]);
+int callback_receive(cJSON* in, char* outbuf, struct lws* wsi, session_data_t* data);
+int callback_file_interrupt(int, int, char[][MAX_LINE_LEN], void*);
+
+void notify_add(struct lws* wsi, char diff[][MAX_LINE_LEN], int len);
+void notify_remove(struct lws* wsi, char diff[][MAX_LINE_LEN], int len);
+void notify_alteration(struct lws* wsi, char diff[][MAX_LINE_LEN], int len);
+void notify_send_request(struct lws* wsi, char diff[][MAX_LINE_LEN], int len, int type, const char* key);
 
 void* callback_file_interrupt_thread(void* args);
 

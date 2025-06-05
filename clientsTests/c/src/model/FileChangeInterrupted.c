@@ -119,7 +119,7 @@ int compareLines(char antes[][MAX_LINE_LEN], int n_antes,
             }
         }
         *n_diff = count;
-        return 1;
+        return 2;
     }
 
     if (n_agora > n_antes) {
@@ -144,16 +144,27 @@ int compareLines(char antes[][MAX_LINE_LEN], int n_antes,
             }
         }
         *n_diff = count;
-        return 2;
+        return 1;
     }
 
     *n_diff = 0;
     return 0;
 }
 
-int fileWatcher(const char *nomeArquivo, const char *diretorio, int (*callback_function)(int, char[][MAX_LINE_LEN]), int* closed) {
+int fileWatcher(struct lws* wsi) {
+    
+    session_data_t* data = (session_data_t *)lws_wsi_user(wsi);
+    const char* diretorio = data->watch->diretorio;
+    const char* nomeArquivo = data->watch->nomeArquivo;
+
     char caminhoCompleto[PATH_MAX + 1];
     snprintf(caminhoCompleto, sizeof(caminhoCompleto), "%s/%s", diretorio, nomeArquivo);
+
+    if (access(caminhoCompleto, F_OK) == 0) {
+        printf("O arquivo '%s' existe.\n", caminhoCompleto);
+    } else {
+        printf("O arquivo '%s' NÃO existe.\n", caminhoCompleto);
+    }
 
     int fd = inotify_init1(IN_NONBLOCK);
     if (fd < 0) {
@@ -187,8 +198,10 @@ int fileWatcher(const char *nomeArquivo, const char *diretorio, int (*callback_f
     printf("Monitorando pasta '%s' [arquivo: %s] para alterações em tempo real...\n",
            diretorio, nomeArquivo);
 
+    // printf("CLOSED %d\n", !*data->watch->closed);
+
     char buffer[BUF_LEN];
-    while (!*closed) {
+    while (!*data->watch->closed) {
 
         usleep(200 * 1000);
 
@@ -216,7 +229,9 @@ int fileWatcher(const char *nomeArquivo, const char *diretorio, int (*callback_f
                             printf("  (Não foi possível ler arquivo '%s' agora.)\n", nomeArquivo);
                         } else {
                             int n_diff = 0;
-                            compareLines(antes, n_antes, agora, n_agora, lineDiff, &n_diff);
+                            int ret = compareLines(antes, n_antes, agora, n_agora, lineDiff, &n_diff);
+
+                            data->watch->callback_function(ret, n_diff, lineDiff, wsi);
 
                             n_antes = n_agora;
                             for (int k = 0; k < n_agora; k++) {

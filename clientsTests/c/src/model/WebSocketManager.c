@@ -53,6 +53,7 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
 
         case LWS_CALLBACK_CLIENT_RECEIVE: {
 
+            session_data_t *data = (session_data_t *)user;
             static char outBuffer [LWS_PRE + BUFFER_SIZE];
 
             cJSON *json = cJSON_Parse((char*)in); // só é permitido receber dados em formato de json
@@ -61,7 +62,7 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
                 break;
             }
 
-            int len = callback_receive(json, outBuffer);
+            int len = callback_receive(json, outBuffer, wsi, data);
 
             cJSON_Delete(json);
 
@@ -84,6 +85,8 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
             break;
 
         case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE:
+
+            session_data_t *data = (session_data_t *)user;
             printf("[client] Servidor fechou conexão\n");
             interrupted = 1;
             lws_cancel_service(lws_get_context(wsi));
@@ -108,7 +111,7 @@ int callback_websockets(struct lws *wsi, enum lws_callback_reasons reason, void 
             }
             
             char buf[32] = {0};
-            int len = callback_receive(json, buf);
+            int len = callback_receive(json, buf, wsi, data);
 
             free(msg);
 
@@ -185,7 +188,7 @@ int callback_writeable(session_data_t* data, char* outBuffer) {
     return len;
 }
 
-int callback_receive(cJSON* msg, char* outbuf) {
+int callback_receive(cJSON* msg, char* outbuf, struct lws* wsi, session_data_t* data) {
 
     char* json_str = cJSON_PrintUnformatted(msg);
     if(json_str) {
@@ -235,7 +238,7 @@ int callback_receive(cJSON* msg, char* outbuf) {
         StunHeader* header = malloc(sizeof(StunHeader));
         cJSON* json = cJSON_CreateObject();
 
-        create_stun_request(header, uuid_u, 0x0004);
+        create_stun_request(header, (unsigned char *)uuid_u, 0x0004);
         stun_header_to_json(json, header);
 
         char* authId_s = authId->valuestring;
@@ -275,7 +278,12 @@ int callback_receive(cJSON* msg, char* outbuf) {
 
         printf("SETUP COMPLETO\n"); // AQUI É ONDE REALMENTE PODE CONSIDERAR QUE O ROTEADOR ESTÁ CONECTADO
 
+        if (pthread_create(data->watch->thread, NULL, callback_file_interrupt_thread, wsi) != 0) {
+            perror("Erro ao criar a thread");
+            return 1;
+        }
 
+        printf("CRIEI A THREAD\n");
 
         return -2; // -2, porque < 0 ele só da break e não escreve nada, mas não é um erro, se precisar tratar, é possível diferenciar
     }
@@ -385,17 +393,98 @@ int callback_receive(cJSON* msg, char* outbuf) {
 }
 
 void* callback_file_interrupt_thread(void *args) {
-    WatcherArgs* watcher = (WatcherArgs*) args; 
+    struct lws* wsi = (struct lws*) args;
 
-    fileWatcher(watcher->nomeArquivo, watcher->diretorio, watcher->callback_function, watcher->closed);
+    printf("CALLBACK THREAD\n");
+
+    fileWatcher(wsi);
 
     return NULL;
 }
 
-int callback_file_interrupt(int type, char diff[][MAX_LINE_LEN]) {
+int callback_file_interrupt(int type, int n_diff, char diff[][MAX_LINE_LEN], void* wsi) {
     
+    struct lws* _wsi = (struct lws*)wsi;
 
+    switch (type)
+    {
+    case 0:
+        printf("Não ouve alterações\n");
+        break;
 
+    case 1:
+        notify_add(_wsi, diff, n_diff);
+        break;
+    
+    case 2:
+        notify_remove(_wsi, diff, n_diff);
+        break;
+
+    case 3:
+        notify_alteration(_wsi, diff, n_diff);
+        break;
+
+    default:
+        
+        printf("Tipo recebido não conhecido\n");
+        break;
+    }
+
+    return 1;
+}
+
+void notify_send_request(struct lws* wsi, char diff[][MAX_LINE_LEN], int len, int type, const char* key) {
+    session_data_t* data = (session_data_t *)lws_wsi_user(wsi);
+    char *buf = malloc(LWS_PRE + BUFFER_SIZE);
+    StunHeader* header = malloc(sizeof(StunHeader));
+    cJSON* json = cJSON_CreateObject();
+
+    create_stun_request(header, data->uuid, type);
+    stun_header_to_json(json, header);
+
+    cJSON *diff_array = cJSON_CreateArray();
+
+    for (int i = 0; i < len; i++) {
+        cJSON *item = cJSON_CreateString(diff[i]);
+        cJSON_AddItemToArray(diff_array, item);
+    }
+
+    cJSON_AddItemToObject(json, key, diff_array);
+
+    char *json_str = cJSON_PrintUnformatted(json);
+    size_t tam = strlen(json_str);
+
+    printf("json_str: %s\n", json_str);
+
+    memcpy(&buf[LWS_PRE], json_str, tam);
+
+    lws_write(wsi, (unsigned char*)&buf[LWS_PRE], tam, LWS_WRITE_TEXT);
+
+    // FALTA ADICIONAR O STUNHEADER/TRANSACTION_ID NA LISTA
+
+    free(header);
+    free(buf);
+    free(json_str);
+    cJSON_Delete(json);
+}
+
+void notify_add(struct lws* wsi, char diff[][MAX_LINE_LEN], int len) {
+
+    printf("Enviando requisição de add para o servidor\n");
+
+    notify_send_request(wsi, diff, len, 0x0008, "notify_add");
+}
+
+void notify_remove(struct lws* wsi, char diff[][MAX_LINE_LEN], int len) {
+    printf("Enviando requisição de remove para o servidor\n");
+
+    notify_send_request(wsi, diff, len, 0x0008, "notify_remove");
+}
+
+void notify_alteration(struct lws* wsi, char diff[][MAX_LINE_LEN], int len) {
+    printf("Enviando requisição de alteração para o servidor\n");
+
+    notify_send_request(wsi, diff, len, 0x0008, "notify_alteration");
 }
 
 int websocket_connect(const char* uuid, char* idToken) {
@@ -403,7 +492,6 @@ int websocket_connect(const char* uuid, char* idToken) {
     struct lws_context_creation_info context_info = {0};
     struct lws_client_connect_info connect_info = {0};
     struct lws_context *context;
-    size_t uuid_len;
     struct lws *wsi;
     session_data_t *data;
     int closed = 0;
@@ -467,12 +555,13 @@ int websocket_connect(const char* uuid, char* idToken) {
     }
 
     WatcherArgs* watcher = malloc(sizeof(WatcherArgs));
-    watcher->nomeArquivo = "dhcp.leases";
-    watcher->nomeArquivo = "/tmp";
+    watcher->nomeArquivo = "teste.txt";
+    watcher->diretorio = ".";
     watcher->callback_function = callback_file_interrupt;
     watcher->closed = &closed;
+    watcher->thread = malloc(sizeof(pthread_t));
 
-    data->watcher = watcher;
+    data->watch = watcher;
 
     while (!interrupted) {
         lws_service(context, 100);
@@ -487,7 +576,13 @@ int websocket_connect(const char* uuid, char* idToken) {
         list = NULL;
     }
 
+    closed = 1;
+
     sleep(5);
+
+    pthread_cancel(*watcher->thread); // destrói a thread
+    free(watcher->thread);
+    free(watcher);
 
     return 1;
 }

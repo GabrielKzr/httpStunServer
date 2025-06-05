@@ -8,7 +8,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <linux/limits.h>
-
+#include <libwebsockets.h>
 
 #define EVENT_SIZE    (sizeof(struct inotify_event))
 #define BUF_LEN       (1024 * (EVENT_SIZE + 16))
@@ -28,10 +28,17 @@ typedef struct {
     const char *nomeArquivo;
     const char *diretorio;
     int *closed;
-    int (*callback_function)(int, char[][MAX_LINE_LEN])
+    int (*callback_function)(int, int, char[][MAX_LINE_LEN], void*);
+    pthread_t* thread;
 } WatcherArgs;
+
+typedef struct {
+    unsigned char uuid[33];
+    char idToken[2049];
+    WatcherArgs* watch;
+} session_data_t;
 
 int parseDeviceLine(const char *line, DeviceEntry *dev);
 int readFile(const char *caminho, char lines[][MAX_LINE_LEN]);
 int compareLines(char antes[][MAX_LINE_LEN], int n_antes, char agora[][MAX_LINE_LEN], int n_agora, char diff[][MAX_LINE_LEN], int *n_diff);
-int fileWatcher(const char *nomeArquivo, const char *diretorio, int (*callback_function)(int, char[][MAX_LINE_LEN]), int* closed);
+int fileWatcher(struct lws* wsi);

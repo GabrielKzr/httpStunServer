@@ -28,8 +28,8 @@ void create_stun_request(StunHeader *header, const unsigned char* uuid, int type
     header->length = 0; // Suponha sem atributos
     header->magic_cookie = MAGIC_COOKIE;
 
-    if(strlen(uuid) != 32) return;
-    strncpy(header->uuid, uuid, 32);
+    if(strlen((const char*)uuid) != 32) return;
+    strncpy(header->uuid, (const char*)uuid, 32);
     header->uuid[32] = '\0';
 
     // Gera transaction ID aleatório
