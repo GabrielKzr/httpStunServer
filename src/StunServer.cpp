@@ -265,6 +265,10 @@ crow::response StunServer::detectRequestTypeHttp(json j, const std::string *clie
 
         return this->getRemoteIp(stunRequest, *clientIp);
 
+    case 0x000B:
+
+        break;
+
     default:
         return crow::response(400, "stun request type does not exist");
         break;
