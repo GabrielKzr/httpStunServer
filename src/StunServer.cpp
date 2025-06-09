@@ -34,7 +34,8 @@ StunServer::StunServer(int port, size_t maxClients) {
 
 // ----------------------------------------------------------------------------
 
-    firebaseManager = new FirebaseManager(PROJECT_ID, FIREBASE_API_KEY, "src/files/sigmarr-c99af-firebase-adminsdk-fbsvc-8f8bd7b716.json");
+    firebaseApi = new FirebaseApi(PROJECT_ID, FIREBASE_API_KEY, "src/files/sigmarr-c99af-firebase-adminsdk-fbsvc-8f8bd7b716.json");
+
 }
 
 void StunServer::stunServerInit() {

@@ -11,7 +11,7 @@
 #include <asio/ssl/context.hpp>
 
 #include "WebSocketManager.hpp"
-#include "FirebaseManager.hpp"
+#include "FirebaseApi.hpp"
 #include "Utils.hpp"
 
 typedef struct {
@@ -71,7 +71,7 @@ class StunServer {
         size_t maxClients;
 
         // controle do banco de dados
-        FirebaseManager* firebaseManager;
+        FirebaseApi* firebaseApi;
 
 // -------------------------------------------------------------------
 
