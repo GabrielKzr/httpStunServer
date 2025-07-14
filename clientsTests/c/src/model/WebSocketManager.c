@@ -493,12 +493,16 @@ int websocket_connect(const char* uuid, char* idToken) {
 
     struct lws_context_creation_info context_info = {0};
     struct lws_client_connect_info connect_info = {0};
-    struct lws_context *context;
-    struct lws *wsi;
-    session_data_t *data;
+    struct lws_context *context = NULL;
+    struct lws *wsi = NULL;
+    session_data_t *data = NULL;
     int closed = 0;
 
+    printf("AAAAAAAAAAAAAAAAA\n");
+
     chownat_init();
+
+    printf("AAAAAAAAAAAAAAAAA\n");
 
     interrupted = 0;
 
@@ -507,13 +511,19 @@ int websocket_connect(const char* uuid, char* idToken) {
     context_info.protocols = protocols;
     context_info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
 
+    printf("AAAAAAAAAAAAAAAAA\n");
+
     lws_set_log_level(LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE, NULL);
+
+    printf("AAAAAAAAAAAAAAAAA\n");
 
     context = lws_create_context(&context_info);
     if (!context) {
         fprintf(stderr, "Erro ao criar contexto\n");
         return 0;
     }
+
+    printf("AAAAAAAAAAAAAAAAA\n");
 
     memset(&connect_info, 0, sizeof(connect_info));
     connect_info.context = context;
@@ -544,7 +554,7 @@ int websocket_connect(const char* uuid, char* idToken) {
         return 0;
     }
 
-    memset(data, 0, sizeof(session_data_t));
+    // memset(data, 0, sizeof(session_data_t));
 
     strncpy((char *)data->uuid, uuid, 32);
     data->uuid[32] = '\0'; 
@@ -556,14 +566,21 @@ int websocket_connect(const char* uuid, char* idToken) {
         data->idToken[0] = '\0'; 
     }
 
+    printf("AAAAAAAAAAAAAAAAA\n");
+
+    /*
     WatcherArgs* watcher = malloc(sizeof(WatcherArgs));
     watcher->nomeArquivo = "teste.txt";
     watcher->diretorio = ".";
     watcher->callback_function = callback_file_interrupt;
     watcher->closed = &closed;
     watcher->thread = malloc(sizeof(pthread_t));
-
+    
     data->watch = watcher;
+    */
+    data->watch = NULL;
+    
+    printf("AAAAAAAAAAAAAAAAA\n");
 
     while (!interrupted) {
         lws_service(context, 100);
@@ -582,9 +599,9 @@ int websocket_connect(const char* uuid, char* idToken) {
 
     sleep(5);
 
-    pthread_cancel(*watcher->thread); // destrói a thread
-    free(watcher->thread);
-    free(watcher);
+    // pthread_cancel(*watcher->thread); // destrói a thread
+    // free(watcher->thread);
+    // free(watcher);
 
     return 1;
 }
