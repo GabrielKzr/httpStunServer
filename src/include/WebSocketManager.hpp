@@ -9,7 +9,7 @@
 
 struct connInfo {
     crow::websocket::connection* conn;
-    std::vector<std::string> portIpMap;
+    std::vector<std::string> portIpMap; // vínculo de porta com IP, sendo a porta o index + BASE_CONN_PORT
     StunHeader header;
 };
 

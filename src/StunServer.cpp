@@ -291,7 +291,7 @@ void StunServer::detectRequestTypeWs(json j, crow::websocket::connection* conn) 
     {
     case 0x0001:
 
-        return this->sendToRouter(stunRequest, conn, &auth_id);
+        return this->verifyRouterUUID(stunRequest, conn, &auth_id);
     
     case 0x0004:
 
@@ -450,7 +450,7 @@ void StunServer::clientBind(StunHeader& stunRequest, crow::websocket::connection
 }
 
 // função que manda para roteador salvar uuid (não salva nada no servidor ainda)
-void StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
+void StunServer::verifyRouterUUID(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId) {
 
     json j;
 
@@ -468,7 +468,7 @@ void StunServer::sendToRouter(StunHeader& stunRequest, crow::websocket::connecti
         return;
     }
 
-    std::cout << "Entro no sendToRouter\n";
+    std::cout << "Entro no verifyRouterUUID\n";
 
     std::string uuid = std::string(stunRequest.uuid);
 

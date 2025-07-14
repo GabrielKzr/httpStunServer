@@ -14,13 +14,6 @@
 #include "FirebaseManager.hpp"
 #include "Utils.hpp"
 
-typedef struct {
-    int socketFd;
-    // XorMappedAddress xorMappedAddress;
-    // StunHeader stunHeader;
-} ClientData;
-
-
 // THE PROTOCOL INFORMATIOS DOWN BELOW ARE NOT THE SAME AS THE PROTOCOL IMPLEMENTED IN THE SERVER (Need to update)
 /*
     * OBS: the message types choosed in this protocol doesn't follow the 
@@ -88,13 +81,12 @@ class StunServer {
 
         void detectRequestTypeWs(json j, crow::websocket::connection* conn);
         crow::response detectRequestTypeHttp(json j, const std::string *clientIp = nullptr);
-        crow::response detectRequestType(StunHeader& stunRequest, std::string* authId, crow::websocket::connection* conn, const std::string* clientIp);
         void clientBind(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
         void clientBind(StunHeader& stunRequest, crow::websocket::connection* conn);
         crow::response exchangeIpRequest(StunHeader& stunRequest, const std::string& clientIp, const std::string& authId);
         crow::response exchangeIpPort(connInfo *conn, int port, const std::string& clientIp, const StunHeader& stunRequest);
         crow::response uuidResponse(StunHeader& stunRequest, std::string* authId);
-        void sendToRouter(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
+        void verifyRouterUUID(StunHeader& stunRequest, crow::websocket::connection* conn, std::string* authId);
         crow::response removeClient(StunHeader& stunRequest, std::string authId);
 
         // ação de stunServer

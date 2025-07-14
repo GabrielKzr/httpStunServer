@@ -191,7 +191,7 @@ int chownat_start(char* remoteaddr, int remoteport)
                         sendto(chownat, "03\n", 3, 0, (struct sockaddr *)&dst, sizeof(dst));
                         static char msg[4];
                         recv(chownat, msg, 3, 0);
-                        msg[4] = 0;
+                        msg[3] = 0;
                         if (strcmp(msg, "03\n") == 0) {
                             printf("DEBUG: REMOTE: Connection opened to remote end\n");
                             break;

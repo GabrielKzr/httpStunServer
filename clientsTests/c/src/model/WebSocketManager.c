@@ -278,12 +278,14 @@ int callback_receive(cJSON* msg, char* outbuf, struct lws* wsi, session_data_t* 
 
         printf("SETUP COMPLETO\n"); // AQUI É ONDE REALMENTE PODE CONSIDERAR QUE O ROTEADOR ESTÁ CONECTADO
 
+        /*
         if (pthread_create(data->watch->thread, NULL, callback_file_interrupt_thread, wsi) != 0) {
             perror("Erro ao criar a thread");
             return 1;
         }
-
+        
         printf("CRIEI A THREAD\n");
+        */
 
         return -2; // -2, porque < 0 ele só da break e não escreve nada, mas não é um erro, se precisar tratar, é possível diferenciar
     }
@@ -515,7 +517,7 @@ int websocket_connect(const char* uuid, char* idToken) {
 
     memset(&connect_info, 0, sizeof(connect_info));
     connect_info.context = context;
-    connect_info.address = "localhost";
+    connect_info.address = "192.168.70.182";
     connect_info.host = connect_info.address;
     connect_info.origin = connect_info.address;
     connect_info.port = 18080;
